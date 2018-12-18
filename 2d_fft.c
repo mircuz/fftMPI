@@ -3,8 +3,8 @@
  Name        : 2d_fft.c
  Author      : Mirco Meazzo
  Version     :
- Copyright   : Your copyright notice
- Description : Hello MPI World in C 
+ Copyright   : GNU GPL v. 3
+ Description :
  ============================================================================
  */
 #include <mpi.h>
@@ -81,12 +81,14 @@ int main(int narg, char **args) {
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
 
-  // ------------------------------------------- Remap Setup ---------------------------------------------
+  //******************************************** Remap Setup ********************************************
+
   void *remap;
   remap3d_create( remap_comm , &remap);
 
   int nqty,permute,memoryflag,sendsize,recvsize;
    nqty = 2;			// Use couples of real numbers per grid point
+   	   	   	   	   	    // TODO Se impiego i complex posso ridurre le dimensioni della trasposta!! E nqty= 1
    permute = 2;  		// From x-contiguous to z-contiguous arrays
    memoryflag = 1;		// Self-allocate the buffers
 
@@ -104,7 +106,7 @@ int main(int narg, char **args) {
    FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
 
-   //-------------------------------------------- Memory filling ----------------------------------------
+   /*/*********************************** Memory filling (IN TRANSPOSE DATATYPE) **********************************
    //Generate Input
    double *p_in;
    p_in = work;
@@ -146,11 +148,96 @@ int main(int narg, char **args) {
    }
 
 
-   // 1D FFT Setup
+*/
+
+   //************************************* Memory filling (IN FFT DATATYPE) ************************************
+      //Generate Input
+      double *p_in;
+      p_in = work;
+      int q= 0, n_seq = 0;
+      FFT_SCALAR *V;
+      V = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+
+      if (rank == 0){
+   	   for (int j = 0; j < nslow; j++)
+   		   for ( int k = 0; k < nmid ; k++ )
+   			   for ( int i = 0; i < nfast*2; i++){
+   				   V[n_seq] = q++;		//L'ordine nella matrice dipende dallo Stride- !!!
+   				   n_seq++;
+   			   }
+      }
+      //TODO fix datatype and elements counter!!
+      //Send chunks of array V to all processors
+      MPI_Scatter( V, 32, MPI_DOUBLE, work, 32,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+
+      //Print work row-wise
+      if (rank == 1){
+   	   printf("\n\nWORK ARRAY\n");
+   	   double *ptr, A, B;
+   	   ptr = work;
+   	   int i = 0, x_plane = 0;
+   	   while ( i < insize*2 ){
+   		   A = *ptr;
+   		   ptr++;
+   		   i++;
+   		   B = *ptr;
+   		   ptr++;
+   		   i++;
+   		   printf("%f +i %f \t", A, B);
+   		   if ( i % 8 == 0){
+   			   printf("\n=============\n");
+   			   x_plane++;
+   		   }
+   	   }
+      }
 
 
 
 
+
+   //******************************************** 1D FFT Setup ********************************************
+
+   fftw_complex *in, *out; // @suppress("Type cannot be resolved")
+   int complex_per_proc = (nfast*nmid*nslow / size);
+   int elem_per_fft = nfast;
+   printf("Complex per processor: %d\n"
+		   "fft length: %d\n"
+		   "Expect %d FFT on processor %d\n"
+		   , complex_per_proc, elem_per_fft, complex_per_proc/elem_per_fft , rank);
+
+   in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * elem_per_fft); // @suppress("Type cannot be resolved")
+   out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * elem_per_fft); // @suppress("Type cannot be resolved")
+
+   fftw_plan fft_handle; // @suppress("Type cannot be resolved")
+   fft_handle = fftw_plan_dft_1d(elem_per_fft, in, out, +1, FFTW_ESTIMATE);
+
+   // I must transform data from DOUBLE to fftw_complex (double[2]) and alloc elem_per_fft per time
+   int count = 0;
+   double *ptr_work;
+   ptr_work = work;
+   while ( count < complex_per_proc/elem_per_fft) {			// To move among rows in the pencil
+	   printf("DATA to TRANSFORM ON RANK %d, COUNT %d\n", rank, count);
+	   for ( int i = 0; i < elem_per_fft; i++ ){			// To fill the array
+		   in[i][0] = *ptr_work++;
+		   in[i][1] = *ptr_work++;
+		   printf("%f+i%f\n", in[i][0], in[i][1]  );
+	   }
+	   count++;
+   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
 
 
    MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
