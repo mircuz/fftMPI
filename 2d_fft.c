@@ -17,6 +17,65 @@
 #include "remap3d_wrap.h"    // To perform 3D remapping
 
 
+void FFT(int nfast, int nmid, int nslow, FFT_SCALAR *work, int rank, int size){
+
+	// Print infos
+	fftw_complex *in, *out; // @suppress("Type cannot be resolved")
+	int complex_per_proc = (nfast*nmid*nslow / size);
+	int elem_per_fft = nfast;
+	printf("Complex per processor: %d\n"
+			"fft length: %d\n"
+			"%d FFT expected on processor %d\n"
+			, complex_per_proc, elem_per_fft, complex_per_proc/elem_per_fft , rank);
+
+	// Alloc mem for transforms
+	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * elem_per_fft); // @suppress("Type cannot be resolved")
+	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * elem_per_fft); // @suppress("Type cannot be resolved")
+
+	// Plan FFT
+	fftw_plan fft_handle; // @suppress("Type cannot be resolved")
+	fft_handle = fftw_plan_dft_1d(elem_per_fft, in, out, +1, FFTW_ESTIMATE);
+
+
+
+	// I must transform data from DOUBLE to fftw_complex (double[2]) and alloc elem_per_fft per time
+	//(!!! SOLO IN FASE DI TESTING, POI IL FLUSSO DI DATI SARA' fftw_complex -> double -> fftw_complex !!!)
+	int count = 0;
+	double *ptr_work;
+	ptr_work = work;
+	while ( count < complex_per_proc/elem_per_fft) {			// To move among rows in the pencil
+		printf("DATA to TRANSFORM ON RANK %d, COUNT %d\n", rank, count);
+		for ( int i = 0; i < elem_per_fft; i++ ){			// To fill the array
+			in[i][0] = *ptr_work++;
+			in[i][1] = *ptr_work++;
+			printf("%f+i%f\n", in[i][0], in[i][1]  );
+		}
+		//Execute FFT TODO from in to where??!!
+		fftw_execute(fft_handle);
+		for (int i = 0; i < elem_per_fft; i++) {		//Normalize
+			out[i][0] = out[i][0] / elem_per_fft;
+			out[i][1] = out[i][1] / elem_per_fft;
+			//printf("%f+i%f\n", out[i][0], out[i][1]  );
+		}
+
+
+
+
+		count++;
+	}
+}
+
+void iFFT(int nfast, int nmid, int nslow, FFT_SCALAR *work, int rank, int size){
+
+	fftw_plan fft_handle2; // @suppress("Type cannot be resolved")
+	fft_handle2 = fftw_plan_dft_1d(elem_per_fft, out, in, -1, FFTW_ESTIMATE);
+
+	fftw_execute(fft_handle2);
+			for (int i = 0; i < elem_per_fft; i++)
+				printf("FORWARD: %f+i%f\n", in[i][0], in[i][1]  );
+
+}
+
 // main program
 int main(int narg, char **args) {
 
@@ -195,7 +254,10 @@ int main(int narg, char **args) {
 
 
 
-   //******************************************** 1D FFT Setup ********************************************
+
+      FFT( nfast, nmid, nslow,  work,  rank,  size);
+
+   /*/******************************************** 1D FFT Setup ********************************************
 
    fftw_complex *in, *out; // @suppress("Type cannot be resolved")
    int complex_per_proc = (nfast*nmid*nslow / size);
@@ -220,13 +282,20 @@ int main(int narg, char **args) {
 	   for ( int i = 0; i < elem_per_fft; i++ ){			// To fill the array
 		   in[i][0] = *ptr_work++;
 		   in[i][1] = *ptr_work++;
-		   printf("%f+i%f\n", in[i][0], in[i][1]  );
+		  // printf("%f+i%f\n", in[i][0], in[i][1]  );
+	   }
+	   //Execute FFT TODO from in to where??!!
+	   fftw_execute(fft_handle);
+	   for (int i = 0; i < elem_per_fft; i++) {
+		   out[i][0] = out[i][0] / elem_per_fft;
+		   out[i][1] = out[i][1] / elem_per_fft;
+		   printf("%f+i%f\n", out[i][0], out[i][1]  );
 	   }
 	   count++;
    }
 
 
-
+*/
 
 
 
