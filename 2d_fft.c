@@ -16,11 +16,27 @@
 #include "fftw3.h"			 // To perform 1D FFT
 #include "remap3d_wrap.h"    // To perform 3D remapping
 
+void print_array( fftw_complex *work, int insize, int elem_per_fft, int rank) { // @suppress("Type cannot be resolved")
 
-void FFT(int nfast, int nmid, int nslow, FFT_SCALAR *work, int rank, int size){
+	//Print work row-wise
+	printf("\n\nLOCAL array on rank: %d\n", rank);
+	double re, im;
 
+	int i = 0;
+	while ( i < insize ){
+		re = work[i][0];		//L'ordine nella matrice dipende dallo Stride- !!!
+		im = work[i][1];
+		printf("%f+i%f\t", re, im);
+		i++;
+		if ( i % elem_per_fft == 0){
+			printf("\n=============\n");
+		}
+	}
+}
+
+void FFT(int nfast, int nmid, int nslow, fftw_complex *work, int rank, int size){ // @suppress("Type cannot be resolved")
+	//******************************************** 1D FFT Setup ********************************************
 	// Print infos
-	fftw_complex *in, *out; // @suppress("Type cannot be resolved")
 	int complex_per_proc = (nfast*nmid*nslow / size);
 	int elem_per_fft = nfast;
 	printf("Complex per processor: %d\n"
@@ -28,44 +44,51 @@ void FFT(int nfast, int nmid, int nslow, FFT_SCALAR *work, int rank, int size){
 			"%d FFT expected on processor %d\n"
 			, complex_per_proc, elem_per_fft, complex_per_proc/elem_per_fft , rank);
 
-	// Alloc mem for transforms
+	// Plan BACKWARD FFT
+	fftw_complex *in; // @suppress("Type cannot be resolved")
 	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * elem_per_fft); // @suppress("Type cannot be resolved")
-	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * elem_per_fft); // @suppress("Type cannot be resolved")
-
-	// Plan FFT
 	fftw_plan fft_handle; // @suppress("Type cannot be resolved")
-	fft_handle = fftw_plan_dft_1d(elem_per_fft, in, out, +1, FFTW_ESTIMATE);
+	fft_handle = fftw_plan_dft_1d(elem_per_fft, in, in, +1, FFTW_MEASURE);
 
 
+/*	fftw_plan fft_handle2; // @suppress("Type cannot be resolved")
+		fft_handle2 = fftw_plan_dft_1d(elem_per_fft, in, in, -1, FFTW_ESTIMATE);	//needed for checks*/
 
-	// I must transform data from DOUBLE to fftw_complex (double[2]) and alloc elem_per_fft per time
-	//(!!! SOLO IN FASE DI TESTING, POI IL FLUSSO DI DATI SARA' fftw_complex -> double -> fftw_complex !!!)
+	//******************************************** 1D FFT Execution ********************************************
+	// TODO I must transform data from fftw_complex -> double -> fftw_complex
+	// !!!! USE FLAGS!! 1 for fftw_complex output, 0 for double output?!!!!!!
 	int count = 0;
-	double *ptr_work;
-	ptr_work = work;
 	while ( count < complex_per_proc/elem_per_fft) {			// To move among rows in the pencil
-		printf("DATA to TRANSFORM ON RANK %d, COUNT %d\n", rank, count);
-		for ( int i = 0; i < elem_per_fft; i++ ){			// To fill the array
-			in[i][0] = *ptr_work++;
-			in[i][1] = *ptr_work++;
+		printf("Data to transform on rank %d, row %d\n", rank, count);
+		// fill IN array
+		for ( int i = 0; i < elem_per_fft; i++ ){
+			in[i][0] = work[i+count*elem_per_fft][0];
+			in[i][1] = work[i+count*elem_per_fft][1];
 			printf("%f+i%f\n", in[i][0], in[i][1]  );
 		}
-		//Execute FFT TODO from in to where??!!
+		// Execute FFT from in to in & Normalize
 		fftw_execute(fft_handle);
-		for (int i = 0; i < elem_per_fft; i++) {		//Normalize
-			out[i][0] = out[i][0] / elem_per_fft;
-			out[i][1] = out[i][1] / elem_per_fft;
-			//printf("%f+i%f\n", out[i][0], out[i][1]  );
+		for (int i = 0; i < elem_per_fft; i++) {
+			in[i][0] = in[i][0] / elem_per_fft;
+			in[i][1] = in[i][1] / elem_per_fft;
+			//printf("Trasformed_%f+i%f\n", in[i][0], in[i][1]  );
 		}
-
-
-
+	/*	fftw_execute(fft_handle2);
+		for (int i = 0; i < elem_per_fft; i++)
+			printf("FORWARD: %f+i%f\n", in[i][0], in[i][1]  );	//	Use it to check*/
+		// Replace data in "work" with values obtained in "in" through transformation
+		for ( int i = 0; i < elem_per_fft; i++ ){
+			work[i+count*elem_per_fft][0] = in[i][0];
+			work[i+count*elem_per_fft][1] = in[i][1];
+			printf("AFTER ALL: %f+i%f\n", work[i+count*elem_per_fft][0],
+					work[i+count*elem_per_fft][1]  );
+		}
 
 		count++;
 	}
 }
 
-void iFFT(int nfast, int nmid, int nslow, FFT_SCALAR *work, int rank, int size){
+/*void iFFT(int nfast, int nmid, int nslow, FFT_SCALAR *work, int rank, int size){
 
 	fftw_plan fft_handle2; // @suppress("Type cannot be resolved")
 	fft_handle2 = fftw_plan_dft_1d(elem_per_fft, out, in, -1, FFTW_ESTIMATE);
@@ -74,7 +97,7 @@ void iFFT(int nfast, int nmid, int nslow, FFT_SCALAR *work, int rank, int size){
 			for (int i = 0; i < elem_per_fft; i++)
 				printf("FORWARD: %f+i%f\n", in[i][0], in[i][1]  );
 
-}
+}*/
 
 // main program
 int main(int narg, char **args) {
@@ -126,7 +149,7 @@ int main(int narg, char **args) {
 
   printf("[BEFORE TRANSPOSITION]\t"
 		  "On rank %d the coordinates are: "
-		  "(%d,%d,%d) -> (%d,%d,%d)\n\n", rank, in_ilo, in_jlo, in_klo, in_ihi, in_jhi, in_khi );
+		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, in_ilo, in_jlo, in_klo, in_ihi, in_jhi, in_khi );
 
   // partition Output grid into Npfast x Npmid x Npslow
   int out_klo = (int) 1.0*ipfast*nfast/npfast;					// K fast
@@ -138,7 +161,7 @@ int main(int narg, char **args) {
 
   printf("[AFTER TRANSPOSITION]\t"
 		  "On rank %d the coordinates are: "
-		  "(%d,%d,%d) -> (%d,%d,%d)\n\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
+		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
 
   //******************************************** Remap Setup ********************************************
 
@@ -160,7 +183,7 @@ int main(int narg, char **args) {
    int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
    //  printf( "%d vs %d is the size on rank %d\n", insize, outsize, rank);
    int remapsize = (insize > outsize) ? insize : outsize;
-   FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+ //  FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
    FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
    FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
@@ -210,52 +233,34 @@ int main(int narg, char **args) {
 */
 
    //************************************* Memory filling (IN FFT DATATYPE) ************************************
-      //Generate Input
-      double *p_in;
-      p_in = work;
-      int q= 0, n_seq = 0;
-      FFT_SCALAR *V;
-      V = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+   //Generate Input
 
-      if (rank == 0){
-   	   for (int j = 0; j < nslow; j++)
+   int q= 0, n_seq = 0;
+   fftw_complex *V; // @suppress("Type cannot be resolved")
+   V = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nslow*nmid*nfast); // @suppress("Type cannot be resolved")
+
+   if (rank == 0){
+	   for (int j = 0; j < nslow; j++)
    		   for ( int k = 0; k < nmid ; k++ )
-   			   for ( int i = 0; i < nfast*2; i++){
-   				   V[n_seq] = q++;		//L'ordine nella matrice dipende dallo Stride- !!!
+   			   for ( int i = 0; i < nfast; i++){
+   				   V[n_seq][0] = q++;		//L'ordine nella matrice dipende dallo Stride- !!!
+   				   V[n_seq][1] = q++;
+   				   //printf("FILLING WITH: %f+i%f\n", V[n_seq][0], V[n_seq][1]);
    				   n_seq++;
    			   }
-      }
-      //TODO fix datatype and elements counter!!
-      //Send chunks of array V to all processors
-      MPI_Scatter( V, 32, MPI_DOUBLE, work, 32,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+   }
 
-      //Print work row-wise
-      if (rank == 1){
-   	   printf("\n\nWORK ARRAY\n");
-   	   double *ptr, A, B;
-   	   ptr = work;
-   	   int i = 0, x_plane = 0;
-   	   while ( i < insize*2 ){
-   		   A = *ptr;
-   		   ptr++;
-   		   i++;
-   		   B = *ptr;
-   		   ptr++;
-   		   i++;
-   		   printf("%f +i %f \t", A, B);
-   		   if ( i % 8 == 0){
-   			   printf("\n=============\n");
-   			   x_plane++;
-   		   }
-   	   }
-      }
+   //Send chunks of array V to all processors
+   fftw_complex *work; // @suppress("Type cannot be resolved")
+   work = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) *remapsize); // @suppress("Type cannot be resolved")
+   int scatter_counter = nfast*nmid*nslow*2 / size;
+   MPI_Scatter( V, scatter_counter, MPI_DOUBLE, work, scatter_counter,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+   print_array( work, insize, 4, rank);	// 4 is the length of the transform
 
 
 
-
-
-
-      FFT( nfast, nmid, nslow,  work,  rank,  size);
+   // Perform FFT along first direction
+   FFT( nfast, nmid, nslow,  work,  rank,  size);
 
    /*/******************************************** 1D FFT Setup ********************************************
 
