@@ -13,10 +13,9 @@
 #include <stdint.h>
 #include <cstdio>
 #include <time.h>
-
 #include "remap3d_wrap.h"    // To perform 3D remapping
 
-void print_array( double *work, int insize, int elem_per_fft, int rank, char string[100] ) {
+void print_array( double *work, int insize, int elem_per_proc, int rank, char string[100] ) {
 
 	//Print work row-wise
 	printf("\n\n%s\n"
@@ -30,7 +29,7 @@ void print_array( double *work, int insize, int elem_per_fft, int rank, char str
 		im = work[i];
 		i++;
 		printf("%f+i%f\t\t", re, im);
-		if ( i % (elem_per_fft*2) == 0){
+		if ( i % (elem_per_proc*2) == 0){
 			printf("\n=============\n");
 		}
 	}
@@ -115,6 +114,46 @@ void FFT( double *c, int N, int isign ) {
   }
 }
 
+void b_FFT( double *work, int elem_per_proc, int N_trasf) {
+
+	double* in = (double *) malloc( sizeof(double)*2*N_trasf );
+	int count = 0;
+	while ( count < elem_per_proc/(2*N_trasf)) {			// To move among rows in the pencil
+		// fill IN array
+		for ( int i = 0; i < 2*N_trasf; i++ ){
+			in[i] = work[i+count*2*N_trasf];
+
+		}
+		// Execute FFT & Normalize
+		FFT( in, N_trasf, -1 );
+		for (int i = 0; i < 2*N_trasf; i++) {
+			work[i+count*2*N_trasf] = in[i] / (N_trasf);
+		}
+		count++;
+	}
+	free(in);
+}
+
+void f_FFT( double *work, int elem_per_proc, int N_trasf) {
+
+	double* in = (double *) malloc( sizeof(double)*2*N_trasf );
+	int count = 0;
+	while ( count < elem_per_proc/(2*N_trasf)) {			// To move among rows in the pencil
+		// fill IN array
+		for ( int i = 0; i < 2*N_trasf; i++ ){
+			in[i] = work[i+count*2*N_trasf];
+		}
+		// Execute FFT
+		FFT( in, N_trasf, +1 );
+		for (int i = 0; i < 2*N_trasf; i++) {
+			work[i+count*2*N_trasf] = in[i];
+
+		}
+		count++;
+	}
+	free(in);
+}
+
 // main program
 int main(int narg, char **args) {
 
@@ -123,16 +162,15 @@ int main(int narg, char **args) {
   MPI_Comm remap_comm; // @suppress("Type cannot be resolved")
   MPI_Comm_dup( MPI_COMM_WORLD, &remap_comm ); // @suppress("Symbol is not resolved")
   MPI_Comm world = MPI_COMM_WORLD; // @suppress("Symbol is not resolved") // @suppress("Type cannot be resolved")
-
   int rank,size;
   MPI_Comm_size(world,&size);
   MPI_Comm_rank(world,&rank);
 
   // Modes
   int nfast,nmid,nslow;
-  nfast = 4;
-  nmid = 4;
-  nslow = 4;
+  nfast = 512;
+  nmid = 512;
+  nslow = 512;
 
   // Algorithm to factor Nprocs into roughly cube roots
   int npfast,npmid,npslow;
@@ -150,6 +188,8 @@ int main(int narg, char **args) {
   }
   npslow = size / npfast / npmid;
 
+
+  /******************************************** Remap Variables *******************************************/
   // partition Input grid into Npfast x Npmid x Npslow
   int ipfast = rank % npfast;
   int ipmid = (rank/npfast) % npmid;
@@ -158,7 +198,7 @@ int main(int narg, char **args) {
 
   in_ilo = (int) 1.0*ipfast*nfast/npfast;						// I fast
   in_ihi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
-  in_jlo = (int) 1.0*ipmid*nmid/npmid;							// j med
+  in_jlo = (int) 1.0*ipmid*nmid/npmid;							// J med
   in_jhi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
   in_klo = (int) 1.0*ipslow*nslow/npslow;						// K slow
   in_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
@@ -179,191 +219,153 @@ int main(int narg, char **args) {
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
 
-
-  //******************************************** Remap Variables ********************************************
-
   void *remap_backward, *remap_forward;
-  remap3d_create( remap_comm , &remap_backward);
-
   int nqty,permute,memoryflag,sendsize,recvsize;
-   nqty = 2;			// Use couples of real numbers per grid point
-   	   	   	   	   	    // TODO RIORDINARE da xyz a zxy, quindi cambiare il permute e le coord dei pencil!!
-   permute = 2;  		// From x-contiguous to z-contiguous arrays
-   memoryflag = 1;		// Self-allocate the buffers
+  nqty = 2;			// Use couples of real numbers per grid point
+  permute = 2;  		// From x-contiguous to z-contiguous arrays
+  memoryflag = 1;		// Self-allocate the buffers
 
-   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
-   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
-   //  printf( "%d vs %d is the size on rank %d\n", insize, outsize, rank);
-   int remapsize = (insize > outsize) ? insize : outsize;
-   FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
-   FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
-   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
+  int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
+  int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
+  int remapsize = (insize > outsize) ? insize : outsize;
+  FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
 
-   //********************************************* Memory filling *********************************************
-   //Generate Input
-   double *p_in;
-   p_in = work;
-   int q= 0, n_seq = 0;
-   FFT_SCALAR *V;
-   V = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  /********************************************* Memory filling ********************************************/
+  //Generate Input
+  double *p_in;
+  p_in = work;
+  int q= 0, n_seq = 0;
+  FFT_SCALAR *V;
+  V = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
 
-   if (rank == 0){
-	   for (int j = 0; j < nslow; j++)
-		   for ( int k = 0; k < nmid ; k++ )
-			   for ( int i = 0; i < nfast*2; i++){
-				   V[n_seq] = q++;		//L'ordine nella matrice dipende dallo Stride- !!!
-				   n_seq++;
-			   }
-   }
+  if (rank == 0){
+	  for (int j = 0; j < nslow; j++)
+		  for ( int k = 0; k < nmid ; k++ )
+			  for ( int i = 0; i < nfast*2; i++){
+				  V[n_seq] = q++;
+				  n_seq++;
+			  }
+  }
 
-   //Send chunks of array V to all processors
-   int elem_per_proc = (nfast*nmid*nslow)*2 /size;
-   int N_trasf = nfast;
-   MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  //Send chunks of array V to all processors
+  int elem_per_proc = (nfast*nmid*nslow)*2 /size;
+  int N_trasf = nfast;
+  MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
-   print_array( work, insize, N_trasf, rank, "Initialized Values");
-
-
-   /*/************************************* Memory filling (IN FFT DATATYPE) ************************************
-   //Generate Input
-
-   int q= 0, n_seq = 0;
-   fftw_complex *V; // @suppress("Type cannot be resolved")
-   V = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * nslow*nmid*nfast); // @suppress("Type cannot be resolved")
-
-   if (rank == 0){
-	   for (int j = 0; j < nslow; j++)
-   		   for ( int k = 0; k < nmid ; k++ )
-   			   for ( int i = 0; i < nfast; i++){
-   				   V[n_seq][0] = q++;		//L'ordine nella matrice dipende dallo Stride- !!!
-   				   V[n_seq][1] = q++;
-   				   //printf("FILLING WITH: %f+i%f\n", V[n_seq][0], V[n_seq][1]);
-   				   n_seq++;
-   			   }
-   }
-
-   //Send chunks of array V to all processors
-   fftw_complex *work; // @suppress("Type cannot be resolved")
-   work = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) *remapsize); // @suppress("Type cannot be resolved")
-   int scatter_counter = nfast*nmid*nslow*2 / size;
-   MPI_Scatter( V, scatter_counter, MPI_DOUBLE, work, scatter_counter,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-   print_array( work, insize, 4, rank);	// 4 is the length of the transform
+  //print_array( work, insize, N_trasf, rank, "Initialized Values");
 
 
-   // Perform FFT along first direction
-   double timer_trasf_1D = 0.0;
-   timer_trasf_1D -= MPI_Wtime();
-   FFT( nfast, nmid, nslow,  work,  rank,  size);
-   timer_trasf_1D += MPI_Wtime();
-   if (rank == 0)
-	   printf("%f sec to perform 1D FFT\n", timer_trasf_1D);
-*/
-
-
-   //************************************************ inverse FFTs **********************************************
-   // ---------------------------------------- Setup Backward Transpose -----------------------------------------
-     remap3d_setup( remap_backward,
+  /************************************************ backward FFTs *********************************************/
+  // ---------------------------------------- Setup Backward Transpose -----------------------------------------
+  remap3d_create( remap_comm , &remap_backward);
+  remap3d_setup( remap_backward,
       		  	  in_ilo,  in_ihi,  in_jlo, in_jhi,  in_klo,  in_khi,
-                  out_ilo,  out_ihi,  out_jlo, out_jhi,  out_klo,  out_khi,
+				  out_ilo,  out_ihi,  out_jlo, out_jhi,  out_klo,  out_khi,
       			  nqty, permute, memoryflag, &sendsize, &recvsize);
-   // -----------------------------------------------------------------------------------------------------------
-
-   // inverse FFT#1		// TODO Creare il ciclo interno ai pencil per effettuare le trasformate
-   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-   clock_t begin_b1 = clock();
-  // FFT( work, N_trasf, -1 );
-   clock_t end_b1 = clock();
-   double time_spent_b1 = (double)(end_b1 - begin_b1) / CLOCKS_PER_SEC;
-   printf("%f sec to perform first 1D FFT on rank %d\n", time_spent_b1, rank);
+  // -----------------------------------------------------------------------------------------------------------
 
 
-   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-   double timer_trasp = 0.0, TIMER_TRASP = 0.0;
-   timer_trasp -= MPI_Wtime();
-   remap3d_remap(remap_backward,work,work,sendbuf,recvbuf);
-   timer_trasp += MPI_Wtime();
-   MPI_Allreduce(&timer_trasp, &TIMER_TRASP,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
-   if (rank == 0) printf("\n%lg sec employed to transpose the array\n", TIMER_TRASP);
-
-   remap3d_destroy(remap_backward);
-
-   // inverse FFT#2
-   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-   clock_t begin_b2 = clock();
-  // FFT( work, N_trasf, -1 );
-   clock_t end_b2 = clock();
-   double time_spent_b2 = (double)(end_b2 - begin_b2) / CLOCKS_PER_SEC;
-   printf("%f sec to perform second 1D FFT on rank %d\n", time_spent_b2, rank);
-
-   //Print work transposed row-wise
-   //print_array( work, insize, N_trasf, rank, "First Transpose performed);
+  // Backward FFT#1
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  double timer_b1 = 0.0;
+  timer_b1 -= MPI_Wtime();
+  b_FFT( work, elem_per_proc, N_trasf );
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_b1 += MPI_Wtime();
 
 
-   //************************************************ inverse FFTs **********************************************
-   // ---------------------------------------- Setup Forward Transpose -----------------------------------------
-   remap3d_create( remap_comm , &remap_forward);
-
-   permute = 1;
-   remap3d_setup( remap_forward,
-		   	   	   out_klo,  out_khi, out_ilo,  out_ihi,  out_jlo, out_jhi,
-				   in_klo,  in_khi, in_ilo,  in_ihi,  in_jlo, in_jhi,
-				   nqty, permute, memoryflag, &sendsize, &recvsize);
-   // -----------------------------------------------------------------------------------------------------------
-
-   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-   remap3d_remap(remap_forward,work,work,sendbuf,recvbuf);
-   remap3d_destroy(remap_forward);
-   //Print work transposed row-wise
-   print_array( work, insize, N_trasf, rank, "Second Transpose Results");
+  // Transpose#1
+  double timer_trasp_b = 0.0, TIMER_TRASP_b = 0.0;
+  timer_trasp_b -= MPI_Wtime();
+  remap3d_remap(remap_backward,work,work,sendbuf,recvbuf);
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_trasp_b += MPI_Wtime();
 
 
-
- /*  // setup FFT, could replace with tune()
-
-   int fftsize,sendsize,recvsize;
-   fft3d_setup(fft,nfast,nmid,nslow,
-               ilo,ihi,jlo,jhi,klo,khi,ilo,ihi,jlo,jhi,klo,khi,
-               0,&fftsize,&sendsize,&recvsize);
-
-   FFT_SCALAR *work = (FFT_SCALAR *) malloc(2*fftsize*sizeof(FFT_SCALAR));
-
-   int n = 0;
-   for (int k = klo; k <= khi; k++) {
-     for (int j = jlo; j <= jhi; j++) {
-       for (int i = ilo; i <= ihi; i++) {
-         work[n] = (double) n;
-         n++;
-         work[n] = (double) n;
-         n++;
-       }
-     }
-   }
+  // Backward FFT#2
+  double timer_b2 = 0.0;
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_b2 -= MPI_Wtime();
+  b_FFT( work, elem_per_proc, N_trasf );
+  timer_b2 += MPI_Wtime();
 
 
-   // perform 2 FFTs
+  remap3d_destroy(remap_backward);
+  //Print work transposed row-wise
+  //print_array( work, insize, N_trasf, rank, "First Transpose performed);
 
-   double timestart = MPI_Wtime();
-   fft3d_compute(fft,work,work,1);        // forward FFT
-   fft3d_compute(fft,work,work,-1);       // inverse FFT
-   double timestop = MPI_Wtime();
+
+  /************************************************ forward FFTs *********************************************/
+  // ---------------------------------------- Setup Forward Transpose -----------------------------------------
+  remap3d_create( remap_comm , &remap_forward);
+  permute = 1; 		// From z-contiguous to x-contiguous arrays
+  remap3d_setup( remap_forward,
+		  	  	  out_klo,  out_khi, out_ilo,  out_ihi,  out_jlo, out_jhi,
+				  in_klo,  in_khi, in_ilo,  in_ihi,  in_jlo, in_jhi,
+				  nqty, permute, memoryflag, &sendsize, &recvsize);
+  // -----------------------------------------------------------------------------------------------------------
+
+
+  // Forward FFT#1
+  double timer_f1 = 0.0;
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_f1 -= MPI_Wtime();
+  f_FFT( work, elem_per_proc, N_trasf );
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_f1 += MPI_Wtime();
+
+
+  // Transpose#2
+  double timer_trasp_f = 0.0, TIMER_TRASP_f = 0.0;
+  timer_trasp_f -= MPI_Wtime();
+  remap3d_remap(remap_forward,work,work,sendbuf,recvbuf);
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_trasp_f += MPI_Wtime();
+
+
+  // Forward FFT#2
+  double timer_f2 = 0.0;
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_f2 -= MPI_Wtime();
+  f_FFT( work, elem_per_proc, N_trasf );
+  timer_f2 += MPI_Wtime();
+
+
+  remap3d_destroy(remap_forward);
+
+  /************************************************ Print Stats *********************************************/
+  // Gather all stats
+  double TIMER_b1, TIMER_b2, TIMER_f1, TIMER_f2;
+  MPI_Allreduce(&timer_trasp_f, &TIMER_TRASP_f,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_trasp_b, &TIMER_TRASP_b,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_b1, &TIMER_b1,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_b2, &TIMER_b2,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_f1, &TIMER_f1,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_f2, &TIMER_f2,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+
+  // Print stats
+  if (rank == 0) {
+	  printf("%lgs employed to perform 2D FFT (backward) \n", TIMER_b1 +TIMER_b2);
+	  printf("%lgs employed to transpose the array (backward) \n\n", TIMER_TRASP_b);
+	  printf("%lgs employed to perform 2D FFT (forward) \n", TIMER_f1 +TIMER_f2);
+  	  printf("%lgs employed to transpose the array (forward) \n", TIMER_TRASP_f);
+  }
+
+
+
+  //print_array( work, insize, N_trasf, rank, "Second Transpose Results");
+
+
+ /*
 
    if (rank == 0) {
     printf("Two %dx%dx%d FFTs on %d procs as %dx%dx%d grid\n",
             nfast,nmid,nslow,size,npfast,npmid,npslow);
 //    printf("CPU time = %g secs\n",timestop-timestart);
    }
-
-
-
-
-
-
-
-
-
-
-
 
    /*
    // find largest difference between initial/final values
@@ -391,9 +393,10 @@ int main(int narg, char **args) {
    // clean up
 
 
-
   free(work);
   free(V);
+  free(recvbuf);
+  free(sendbuf);
 
 
   MPI_Finalize();
