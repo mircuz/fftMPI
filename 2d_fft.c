@@ -16,6 +16,33 @@
 
 #include "remap3d_wrap.h"    // To perform 3D remapping
 
+// Definitions of the Structures
+/*		*- 				   -*					*- 				   -*
+ * 		|	u.Re	u.Im	|					|	uu.Re	uu.Im	|
+ * 	V=	|	v.Re	v.Im	|				M=	|	uv.Re	uv.Im	|
+ * 		|	w.Re	w.Im	|					|	vv.Re	vv.Im	|
+ * 		*-				   -*					|	vw.Re	vw.Im	|
+ * 												|	ww.Re	ww.Im	|
+ * 												|	uw.Re	uw.Im	|
+ * 												*- 				   -*
+ */
+typedef struct VELOCITY {
+	FFT_SCALAR u[2];
+	FFT_SCALAR v[2];
+	FFT_SCALAR w[2];
+	};
+
+typedef struct MOMFLUX {
+	FFT_SCALAR uu[2];
+	FFT_SCALAR uv[2];
+	FFT_SCALAR vv[2];
+	FFT_SCALAR vw[2];
+	FFT_SCALAR ww[2];
+	FFT_SCALAR uw[2];
+};
+
+
+
 void print_array( double *work, int insize, int elem_per_proc, int rank, char string[100] ) {
 
 	//Print work row-wise
@@ -158,7 +185,6 @@ void f_FFT( double *work, int elem_per_proc, int N_trasf) {
 void check_results( double *work, double *work_ref, int elem_per_proc) {
 
 	/* Remind to add in "Memory Filling" section the following lines od code:
-	 *
 	 * FFT_SCALAR *work_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
 	 * MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work_ref, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); */
 
@@ -170,6 +196,7 @@ void check_results( double *work, double *work_ref, int elem_per_proc) {
 			  printf("Max difference in initial/final values = %.20f\n",mostdiff);
 	  	  }
 		}
+	  //print_array( work_ref, insize, N_trasf, rank, "Reference");
 }
 
 // main program
@@ -203,7 +230,6 @@ int main(int narg, char **args) {
     npmid++;
   }
   npslow = size / npfast / npmid;
-
 
   if (rank == 0) {
   	  printf("Two %dx%dx%d FFTs on %d procs as %dx%dx%d grid\n",
@@ -251,12 +277,13 @@ int main(int narg, char **args) {
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
   FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
-
   FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
 
   /********************************************* Memory filling ********************************************/
+
+
   //Generate Input
   double *p_in;
   p_in = work;
@@ -268,8 +295,8 @@ int main(int narg, char **args) {
 	  for (int j = 0; j < nslow; j++)
 		  for ( int k = 0; k < nmid ; k++ )
 			  for ( int i = 0; i < nfast*2; i++){
-				  // V[n_seq] = q++;
-				  V[n_seq] = (float)rand()/ (float)(RAND_MAX/10);
+				   V[n_seq] = q++;
+				  //V[n_seq] = (float)rand()/ (float)(RAND_MAX/10);
 				  n_seq++;
 			  }
   }
@@ -358,6 +385,7 @@ int main(int narg, char **args) {
 
 
   remap3d_destroy(remap_forward);
+  //print_array( work, insize, N_trasf, rank, "Second Transpose Results");
 
   /************************************************ Print Stats *********************************************/
   // Gather all stats
@@ -378,18 +406,10 @@ int main(int narg, char **args) {
   }
 
 
-
-  //print_array( work, insize, N_trasf, rank, "Second Transpose Results");
-  //print_array( work_ref, insize, N_trasf, rank, "Reference");
-
-
-
-  // Clean up
+  /**************************************** Release Mem & Finalize MPI *************************************/
   free(work);
   free(V);
   free(recvbuf);
   free(sendbuf);
-
-
   MPI_Finalize();
 }
