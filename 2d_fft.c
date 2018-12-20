@@ -16,32 +16,6 @@
 
 #include "remap3d_wrap.h"    // To perform 3D remapping
 
-// Definitions of the Structures
-/*		*- 				   -*					*- 				   -*
- * 		|	u.Re	u.Im	|					|	uu.Re	uu.Im	|
- * 	V=	|	v.Re	v.Im	|				M=	|	uv.Re	uv.Im	|
- * 		|	w.Re	w.Im	|					|	vv.Re	vv.Im	|
- * 		*-				   -*					|	vw.Re	vw.Im	|
- * 												|	ww.Re	ww.Im	|
- * 												|	uw.Re	uw.Im	|
- * 												*- 				   -*
- */
-typedef struct VELOCITY {
-	FFT_SCALAR u[2];
-	FFT_SCALAR v[2];
-	FFT_SCALAR w[2];
-	};
-
-typedef struct MOMFLUX {
-	FFT_SCALAR uu[2];
-	FFT_SCALAR uv[2];
-	FFT_SCALAR vv[2];
-	FFT_SCALAR vw[2];
-	FFT_SCALAR ww[2];
-	FFT_SCALAR uw[2];
-};
-
-
 
 void print_array( double *work, int insize, int elem_per_proc, int rank, char string[100] ) {
 
@@ -199,8 +173,13 @@ void check_results( double *work, double *work_ref, int elem_per_proc) {
 	  //print_array( work_ref, insize, N_trasf, rank, "Reference");
 }
 
-// main program
+
 int main(int narg, char **args) {
+	/**************************************************************************************************************
+	 * 																											  *
+	 * 								2D FFT with Pencil Decomposition in MPI Space								  *
+	 * 																											  *
+	 **************************************************************************************************************/
 
   // setup MPI
   MPI_Init(&narg,&args);
@@ -213,7 +192,7 @@ int main(int narg, char **args) {
 
   // Modes
   int nfast,nmid,nslow;
-  nfast = nmid = nslow = 4;
+  nfast = nmid = nslow = 512;
 
   // Algorithm to factor Nprocs into roughly cube roots
   int npfast,npmid,npslow;
@@ -276,7 +255,9 @@ int main(int narg, char **args) {
   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
-  FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *u = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *v = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *w = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
@@ -285,27 +266,44 @@ int main(int narg, char **args) {
 
 
   //Generate Input
-  double *p_in;
-  p_in = work;
   int q= 0, n_seq = 0;
-  FFT_SCALAR *V;
+  FFT_SCALAR *V, *U, *W;
+  U = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
   V = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  W = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+
 
   if (rank == 0){
-	  for (int j = 0; j < nslow; j++)
-		  for ( int k = 0; k < nmid ; k++ )
-			  for ( int i = 0; i < nfast*2; i++){
-				   V[n_seq] = q++;
-				  //V[n_seq] = (float)rand()/ (float)(RAND_MAX/10);
-				  n_seq++;
-			  }
+	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
+		  //U[i] = q++;
+		  U[i] = (float)rand()/ (float)(RAND_MAX/10);
+	  }
+	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
+		  //V[i] = q++;
+		  V[i] = (float)rand()/ (float)(RAND_MAX/10);
+	  }
+	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
+		  //W[i] = q++;
+		  W[i] = (float)rand()/ (float)(RAND_MAX/10);
+	  }
   }
 
   //Send chunks of array V to all processors
   int elem_per_proc = (nfast*nmid*nslow)*2 /size;
   int N_trasf = nfast;
-  MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, v, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Scatter( W, elem_per_proc , MPI_DOUBLE, w, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   //print_array( work, insize, N_trasf, rank, "Initialized Values");
+
+
+  //TODO Checks
+  FFT_SCALAR *u_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *v_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *w_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u_ref, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, v_ref, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Scatter( W, elem_per_proc , MPI_DOUBLE, w_ref, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 
   /************************************************ backward FFTs *********************************************/
@@ -322,7 +320,7 @@ int main(int narg, char **args) {
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   double timer_b1 = 0.0;
   timer_b1 -= MPI_Wtime();
-  b_FFT( work, elem_per_proc, N_trasf );
+  b_FFT( u, elem_per_proc, N_trasf );	b_FFT( v, elem_per_proc, N_trasf );		b_FFT( w, elem_per_proc, N_trasf );
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_b1 += MPI_Wtime();
 
@@ -330,7 +328,9 @@ int main(int narg, char **args) {
   // Transpose#1
   double timer_trasp_b = 0.0, TIMER_TRASP_b = 0.0;
   timer_trasp_b -= MPI_Wtime();
-  remap3d_remap(remap_backward,work,work,sendbuf,recvbuf);
+  remap3d_remap(remap_backward,u,u,sendbuf,recvbuf);
+  remap3d_remap(remap_backward,v,v,sendbuf,recvbuf);
+  remap3d_remap(remap_backward,w,w,sendbuf,recvbuf);
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_trasp_b += MPI_Wtime();
 
@@ -339,7 +339,7 @@ int main(int narg, char **args) {
   double timer_b2 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_b2 -= MPI_Wtime();
-  b_FFT( work, elem_per_proc, N_trasf );
+  b_FFT( u, elem_per_proc, N_trasf );	b_FFT( v, elem_per_proc, N_trasf );	b_FFT( w, elem_per_proc, N_trasf );
   timer_b2 += MPI_Wtime();
 
 
@@ -363,7 +363,7 @@ int main(int narg, char **args) {
   double timer_f1 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f1 -= MPI_Wtime();
-  f_FFT( work, elem_per_proc, N_trasf );
+  f_FFT( u, elem_per_proc, N_trasf );	f_FFT( v, elem_per_proc, N_trasf );		f_FFT( w, elem_per_proc, N_trasf );
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f1 += MPI_Wtime();
 
@@ -371,7 +371,9 @@ int main(int narg, char **args) {
   // Transpose#2
   double timer_trasp_f = 0.0, TIMER_TRASP_f = 0.0;
   timer_trasp_f -= MPI_Wtime();
-  remap3d_remap(remap_forward,work,work,sendbuf,recvbuf);
+  remap3d_remap(remap_forward,u,u,sendbuf,recvbuf);
+  remap3d_remap(remap_forward,v,v,sendbuf,recvbuf);
+  remap3d_remap(remap_forward,w,w,sendbuf,recvbuf);
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_trasp_f += MPI_Wtime();
 
@@ -380,12 +382,18 @@ int main(int narg, char **args) {
   double timer_f2 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f2 -= MPI_Wtime();
-  f_FFT( work, elem_per_proc, N_trasf );
+  f_FFT( u, elem_per_proc, N_trasf ); 	f_FFT( v, elem_per_proc, N_trasf );		f_FFT( w, elem_per_proc, N_trasf );
   timer_f2 += MPI_Wtime();
 
 
   remap3d_destroy(remap_forward);
-  //print_array( work, insize, N_trasf, rank, "Second Transpose Results");
+  //print_array( u, insize, N_trasf, rank, "Second Transpose Results U");
+  //print_array( v, insize, N_trasf, rank, "Second Transpose Results V");
+  //print_array( w, insize, N_trasf, rank, "Second Transpose Results W");
+
+  check_results( u, u_ref, elem_per_proc);
+  check_results( v, v_ref, elem_per_proc);
+  check_results( v, v_ref, elem_per_proc);
 
   /************************************************ Print Stats *********************************************/
   // Gather all stats
@@ -407,7 +415,7 @@ int main(int narg, char **args) {
 
 
   /**************************************** Release Mem & Finalize MPI *************************************/
-  free(work);
+  free(u);
   free(V);
   free(recvbuf);
   free(sendbuf);
