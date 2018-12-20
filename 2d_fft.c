@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <cstdio>
 #include <time.h>
+
 #include "remap3d_wrap.h"    // To perform 3D remapping
 
 void print_array( double *work, int insize, int elem_per_proc, int rank, char string[100] ) {
@@ -154,6 +155,23 @@ void f_FFT( double *work, int elem_per_proc, int N_trasf) {
 	free(in);
 }
 
+void check_results( double *work, double *work_ref, int elem_per_proc) {
+
+	/* Remind to add in "Memory Filling" section the following lines od code:
+	 *
+	 * FFT_SCALAR *work_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+	 * MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work_ref, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); */
+
+	  double mostdiff = 0.0, mydiff= 0.0;
+	  for ( int i = 0; i < elem_per_proc; i++) {
+		  mydiff = fabs( work[i] - work_ref[i]);
+		  if ( mydiff > mostdiff ) {
+			  mostdiff = mydiff;
+			  printf("Max difference in initial/final values = %.20f\n",mostdiff);
+	  	  }
+		}
+}
+
 // main program
 int main(int narg, char **args) {
 
@@ -233,7 +251,7 @@ int main(int narg, char **args) {
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
   FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
-  FFT_SCALAR *work_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+
   FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
@@ -260,8 +278,6 @@ int main(int narg, char **args) {
   int elem_per_proc = (nfast*nmid*nslow)*2 /size;
   int N_trasf = nfast;
   MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work_ref, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-
   //print_array( work, insize, N_trasf, rank, "Initialized Values");
 
 
@@ -355,8 +371,8 @@ int main(int narg, char **args) {
 
   // Print stats
   if (rank == 0) {
-	  printf("%lgs employed to perform 2D FFT (backward) \n", TIMER_b1 +TIMER_b2);
-	  printf("%lgs employed to transpose the array (backward) \n\n", TIMER_TRASP_b);
+	  printf("\n%lgs employed to perform 2D FFT (backward) \n", TIMER_b1 +TIMER_b2);
+	  printf("%lgs employed to transpose the array (backward) \n", TIMER_TRASP_b);
 	  printf("%lgs employed to perform 2D FFT (forward) \n", TIMER_f1 +TIMER_f2);
   	  printf("%lgs employed to transpose the array (forward) \n", TIMER_TRASP_f);
   }
@@ -366,17 +382,6 @@ int main(int narg, char **args) {
   //print_array( work, insize, N_trasf, rank, "Second Transpose Results");
   //print_array( work_ref, insize, N_trasf, rank, "Reference");
 
-
-  // find largest difference between initial/final values
-  double mostdiff = 0.0, mydiff= 0.0;
-  for ( int i = 0; i < elem_per_proc; i++) {
-	  mydiff = fabs( work[i] - work_ref[i]);
-	  if ( mydiff > mostdiff ) {
-		  mostdiff = mydiff;
-		  printf("Max difference in initial/final values = %.20f\n",mostdiff);
-  	  }
-
-	}
 
 
   // Clean up
