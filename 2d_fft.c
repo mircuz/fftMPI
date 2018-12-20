@@ -168,9 +168,7 @@ int main(int narg, char **args) {
 
   // Modes
   int nfast,nmid,nslow;
-  nfast = 512;
-  nmid = 512;
-  nslow = 512;
+  nfast = nmid = nslow = 4;
 
   // Algorithm to factor Nprocs into roughly cube roots
   int npfast,npmid,npslow;
@@ -187,6 +185,12 @@ int main(int narg, char **args) {
     npmid++;
   }
   npslow = size / npfast / npmid;
+
+
+  if (rank == 0) {
+  	  printf("Two %dx%dx%d FFTs on %d procs as %dx%dx%d grid\n",
+  			  nfast,nmid,nslow,size,npfast,npmid,npslow);
+    }
 
 
   /******************************************** Remap Variables *******************************************/
@@ -229,6 +233,7 @@ int main(int narg, char **args) {
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
   FFT_SCALAR *work = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
+  FFT_SCALAR *work_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
@@ -245,7 +250,8 @@ int main(int narg, char **args) {
 	  for (int j = 0; j < nslow; j++)
 		  for ( int k = 0; k < nmid ; k++ )
 			  for ( int i = 0; i < nfast*2; i++){
-				  V[n_seq] = q++;
+				  // V[n_seq] = q++;
+				  V[n_seq] = (float)rand()/ (float)(RAND_MAX/10);
 				  n_seq++;
 			  }
   }
@@ -254,6 +260,7 @@ int main(int narg, char **args) {
   int elem_per_proc = (nfast*nmid*nslow)*2 /size;
   int N_trasf = nfast;
   MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, work_ref, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
   //print_array( work, insize, N_trasf, rank, "Initialized Values");
 
@@ -357,42 +364,22 @@ int main(int narg, char **args) {
 
 
   //print_array( work, insize, N_trasf, rank, "Second Transpose Results");
+  //print_array( work_ref, insize, N_trasf, rank, "Reference");
 
 
- /*
+  // find largest difference between initial/final values
+  double mostdiff = 0.0, mydiff= 0.0;
+  for ( int i = 0; i < elem_per_proc; i++) {
+	  mydiff = fabs( work[i] - work_ref[i]);
+	  if ( mydiff > mostdiff ) {
+		  mostdiff = mydiff;
+		  printf("Max difference in initial/final values = %.20f\n",mostdiff);
+  	  }
 
-   if (rank == 0) {
-    printf("Two %dx%dx%d FFTs on %d procs as %dx%dx%d grid\n",
-            nfast,nmid,nslow,size,npfast,npmid,npslow);
-//    printf("CPU time = %g secs\n",timestop-timestart);
-   }
-
-   /*
-   // find largest difference between initial/final values
-   // should be near zero
-
-   n = 0;
-   double mydiff = 0.0;
-   for (int k = klo; k <= khi; k++) {
-     for (int j = jlo; j <= jhi; j++) {
-       for (int i = ilo; i <= ihi; i++) {
-         if (fabs(work[n]-n) > mydiff) mydiff = fabs(work[n]-n);
-         n++;
-         if (fabs(work[n]-n) > mydiff) mydiff = fabs(work[n]-n);
-         n++;
-       }
-     }
-   }
-
-   double alldiff;
-   MPI_Allreduce(&mydiff,&alldiff,1,MPI_DOUBLE,MPI_MAX,world);
-   if (rank == 0) printf("Max difference in initial/final values = %g\n",alldiff);
- */
+	}
 
 
-   // clean up
-
-
+  // Clean up
   free(work);
   free(V);
   free(recvbuf);
