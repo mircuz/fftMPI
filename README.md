@@ -1,4 +1,4 @@
-#Validation test for a 2D FFT.
+# Validation test for a 2D FFT.
 
 This script does a 2D pencil decomposition along y direction and perform an FFT
 on a complex dataset.
