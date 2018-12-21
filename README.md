@@ -8,7 +8,7 @@ such actions.
 Numbers of modes is selected during the declarations of the variables at top of
 the program.
 
-## How it works
+## How does it works
 First of all the script load a complex dataset and setup the first transpose.
 Once this is done it does a 1D FFT along X, transpose the data across the domain
 and than perform another 1D FFT, this time on Z direction.
