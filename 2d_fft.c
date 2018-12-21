@@ -1,19 +1,14 @@
-/*
- ============================================================================
- Name        : 2d_fft.c
- Author      : Mirco Meazzo
- Version     :
- Copyright   : GNU GPL v. 3
- Description :
- ============================================================================
- */
+	/**************************************************************************************************************
+	 * 																											  *
+	 * 								2D FFT with Pencil Decomposition in MPI Space								  *
+	 * 																											  *
+	 **************************************************************************************************************/
+//*	Author: Mirco Meazzo */
 #include <mpi.h>
 #include <math.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <cstdio>
 #include <time.h>
-
 #include "remap3d_wrap.h"    // To perform 3D remapping
 
 
@@ -22,13 +17,10 @@ void FFT( double *c, int N, int isign );
 void b_FFT( double *work, int elem_per_proc, int N_trasf);
 void f_FFT( double *work, int elem_per_proc, int N_trasf);
 void check_results( double *work, double *work_ref, int elem_per_proc);
+void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int nmid, int nslow, int rank);
 
 int main(int narg, char **args) {
-	/**************************************************************************************************************
-	 * 																											  *
-	 * 								2D FFT with Pencil Decomposition in MPI Space								  *
-	 * 																											  *
-	 **************************************************************************************************************/
+
 
   // setup MPI
   MPI_Init(&narg,&args);
@@ -42,7 +34,7 @@ int main(int narg, char **args) {
 
   // Modes
   int nfast,nmid,nslow;
-  nfast = nmid = nslow = 4;
+  nfast = nmid = nslow = 256;
 
 
   // Algorithm to factor Nprocs into roughly cube roots
@@ -101,14 +93,19 @@ int main(int narg, char **args) {
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
 
   void *remap_backward, *remap_forward;
-  int nqty,permute,memoryflag,sendsize,recvsize;
+  int nqty, permute, memoryflag, sendsize, recvsize;
   nqty = 2;			// Use couples of real numbers per grid point
   permute = 2;  		// From x-contiguous to z-contiguous arrays
   memoryflag = 1;		// Self-allocate the buffers
 
+
+  /****************************************** Sizing Variables *****************************************/
   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
+
+  int elem_per_proc = (nfast*nmid*nslow)*2 /size;
+  int N_trasf = nfast;
 
 
   /******************************************** Memory Alloc *******************************************/
@@ -128,36 +125,30 @@ int main(int narg, char **args) {
 
 
   /********************************************* Memory filling ********************************************/
-  //Generate Input
-  int q= 0, n_seq = 0;
+  // Allocate the arrays
   FFT_SCALAR *V, *U, *W;
   U = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
   V = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
   W = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
 
-  if (rank == 0){
-	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
-		  //U[i] = q++;
-		  U[i] = (float)rand()/ (float)(RAND_MAX/10);
-	  }
-	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
-		  //V[i] = q++;
-		  V[i] = (float)rand()/ (float)(RAND_MAX/10);
-	  }
-	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
-		  //W[i] = q++;
-		  W[i] = (float)rand()/ (float)(RAND_MAX/10);
+  if (rank == 0) {
+	  //On rank 0 read the dataset
+	  FILE *U_dat;	U_dat = fopen( "u.dat", "r");
+	  FILE *V_dat;	V_dat = fopen( "v.dat", "r");
+	  FILE *W_dat;	W_dat = fopen( "w.dat", "r");
+	  //Fill the allocated arrays
+	  for ( int i = 0; i < nfast*nmid*nslow*2; i++) {
+		  fscanf( U_dat, "%lf", &U[i]);
+		  fscanf( V_dat, "%lf", &V[i]);
+		  fscanf( W_dat, "%lf", &W[i]);
+		 // printf("I've read %lf\n", U[i]);
 	  }
   }
-
-
-  //Send chunks of array V to all processors
-  int elem_per_proc = (nfast*nmid*nslow)*2 /size;
-  int N_trasf = nfast;
+  //Send chunks of array Velocity to all processors
   MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, v, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Scatter( W, elem_per_proc , MPI_DOUBLE, w, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  //print_array( work, insize, N_trasf, rank, "Initialized Values");
+ // print_array( w, insize, N_trasf, rank, "Initialized Values");
 
 
   /************************************************ backward FFTs *********************************************/
@@ -198,8 +189,8 @@ int main(int narg, char **args) {
 
   //Finalize plan
   remap3d_destroy(remap_backward);
-  print_array( v, insize, N_trasf, rank, "First Transpose of V performed");
-  print_array( w, insize, N_trasf, rank, "First Transpose of W performed");
+  //print_array( u, insize, N_trasf, rank, "First Transpose of U performed");
+  //print_array( w, insize, N_trasf, rank, "First Transpose of W performed");
 
 
   /************************************************ Convolutions *********************************************/
@@ -216,7 +207,7 @@ int main(int narg, char **args) {
   }
   timer_conv += MPI_Wtime();
 
-  print_array( vw, insize, N_trasf, rank, "WV performed");
+  //print_array( uu, insize, N_trasf, rank, "UU performed");
 
   /************************************************ forward FFTs *********************************************/
   // ---------------------------------------- Setup Forward Transpose -----------------------------------------
@@ -261,10 +252,19 @@ int main(int narg, char **args) {
 
   // Finalize plan
   remap3d_destroy(remap_forward);
- // print_array( uw, insize, N_trasf, rank, "Second Transpose Results UW");
+  //print_array( uw, insize, N_trasf, rank, "Second Transpose Results UU");
 
 
   /************************************************ Print Stats *********************************************/
+  // Alloc memory for the global output
+  FFT_SCALAR *UU, *UV, *VV, *VW, *WW, *UW;
+  UU = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  UV = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  VV = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  VW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  WW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  UW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+
   // Gather all stats
   double TIMER_b1, TIMER_b2, TIMER_f1, TIMER_f2, TIMER_conv;
   MPI_Allreduce(&timer_trasp_f, &TIMER_TRASP_f,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
@@ -274,6 +274,12 @@ int main(int narg, char **args) {
   MPI_Allreduce(&timer_f1, &TIMER_f1,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_f2, &TIMER_f2,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_conv, &TIMER_conv,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Gather( uu, elem_per_proc, MPI_DOUBLE, UU, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( uv, elem_per_proc, MPI_DOUBLE, UV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( vv, elem_per_proc, MPI_DOUBLE, VV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( vw, elem_per_proc, MPI_DOUBLE, VW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( ww, elem_per_proc, MPI_DOUBLE, WW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( uw, elem_per_proc, MPI_DOUBLE, UW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
   // Print stats
   if (rank == 0) {
@@ -284,13 +290,26 @@ int main(int narg, char **args) {
   	  printf("%lgs employed to transpose the array (forward) \n", TIMER_TRASP_f);
   	  printf("%lgs employed to perform convolutions \n", TIMER_conv);
   	  printf("-----------------------------------------------------------\n\n");
-  }
 
+  	  printf("Saving data on disk...\n");
+  	  // Disk files
+  	  FILE *UU_dat, *UV_dat, *VV_dat, *VW_dat, *WW_dat, *UW_dat;
+  	  UU_dat = fopen( "uu.dat", "w+");		UV_dat = fopen( "uv.dat", "w+");
+  	  VV_dat = fopen( "vv.dat", "w+");		VW_dat = fopen( "vw.dat", "w+");
+  	  WW_dat = fopen( "ww.dat", "w+");		UW_dat = fopen( "uw.dat", "w+");
+  	  for (int i = 0; i < nfast*nmid*nslow*2; i++ ) {
+  		  fprintf( UU_dat, "%lf\n", UU[i]);		fprintf( UV_dat, "%lf\n", UV[i]);
+  		  fprintf( VV_dat, "%lf\n", VV[i]);		fprintf( VW_dat, "%lf\n", VW[i]);
+  		  fprintf( WW_dat, "%lf\n", WW[i]);		fprintf( UW_dat, "%lf\n", UW[i]);
+  	  }
+  	  printf("Process Ended\n");
+  }
 
   /**************************************** Release Mem & Finalize MPI *************************************/
   free(u);	free(v);	free(w);
   free(uu);	free(uv);	free(vv);	free(vw);	free(ww);	free(uw);
   free(U);	free(V);	free(W);
+  free(UU);	free(UV);	free(VV);	free(VW);	free(WW);	free(UW);
   free(recvbuf);
   free(sendbuf);
   MPI_Finalize();
@@ -458,4 +477,26 @@ void check_results( double *work, double *work_ref, int elem_per_proc) {
 	  	  }
 		}
 	  //print_array( work_ref, insize, N_trasf, rank, "Reference");
+}
+
+void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int nmid, int nslow, int rank) {
+	//Generate Input
+	//int q= 0.0;
+	if (rank == 0){
+	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
+		  //U[i] = q++;
+		  U[i] = (float)rand()/ (float)(RAND_MAX/10);
+	  }
+	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
+		  //V[i] = q++;
+		  V[i] = (float)rand()/ (float)(RAND_MAX/10);
+	  }
+	  for ( int i = 0; i < nslow*nmid*nfast *2; i++) {
+		  //W[i] = q++;
+		  W[i] = (float)rand()/ (float)(RAND_MAX/10);
+	  }
+  }
+
+
+
 }
