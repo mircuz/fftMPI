@@ -34,12 +34,11 @@ int main(int narg, char **args) {
 
   // Modes
   int nfast,nmid,nslow;
-  nfast = nmid = nslow = 256;
+  nfast = nmid = nslow = 10;
 
 
   // Algorithm to factor Nprocs into roughly cube roots
   int npfast,npmid,npslow;
-
   npfast = (int) pow(size,1.0/3.0);
   while (npfast < size) {
     if (size % npfast == 0) break;
@@ -52,6 +51,7 @@ int main(int narg, char **args) {
     npmid++;
   }
   npslow = size / npfast / npmid;
+
 
   if (rank == 0) {
   	  printf("\n===============================================================\n"
@@ -103,7 +103,6 @@ int main(int narg, char **args) {
   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
-
   int elem_per_proc = (nfast*nmid*nslow)*2 /size;
   int N_trasf = nfast;
 
@@ -112,14 +111,12 @@ int main(int narg, char **args) {
   FFT_SCALAR *u = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *v = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *w = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
-
   FFT_SCALAR *uu = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *uv = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *vv = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *vw = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *ww = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *uw = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
-
   FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
@@ -206,8 +203,8 @@ int main(int narg, char **args) {
 	  uw[i] = u[i]*w[i];
   }
   timer_conv += MPI_Wtime();
-
   //print_array( uu, insize, N_trasf, rank, "UU performed");
+
 
   /************************************************ forward FFTs *********************************************/
   // ---------------------------------------- Setup Forward Transpose -----------------------------------------
@@ -274,11 +271,17 @@ int main(int narg, char **args) {
   MPI_Allreduce(&timer_f1, &TIMER_f1,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_f2, &TIMER_f2,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_conv, &TIMER_conv,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( uu, elem_per_proc, MPI_DOUBLE, UU, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( uv, elem_per_proc, MPI_DOUBLE, UV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( vv, elem_per_proc, MPI_DOUBLE, VV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( vw, elem_per_proc, MPI_DOUBLE, VW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( ww, elem_per_proc, MPI_DOUBLE, WW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( uw, elem_per_proc, MPI_DOUBLE, UW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
   // Print stats
@@ -290,9 +293,8 @@ int main(int narg, char **args) {
   	  printf("%lgs employed to transpose the array (forward) \n", TIMER_TRASP_f);
   	  printf("%lgs employed to perform convolutions \n", TIMER_conv);
   	  printf("-----------------------------------------------------------\n\n");
-
-  	  printf("Saving data on disk...\n");
   	  // Disk files
+  	  printf("Saving data on disk...\n");
   	  FILE *UU_dat, *UV_dat, *VV_dat, *VW_dat, *WW_dat, *UW_dat;
   	  UU_dat = fopen( "uu.dat", "w+");		UV_dat = fopen( "uv.dat", "w+");
   	  VV_dat = fopen( "vv.dat", "w+");		VW_dat = fopen( "vw.dat", "w+");
@@ -305,6 +307,7 @@ int main(int narg, char **args) {
   	  printf("Process Ended\n");
   }
 
+
   /**************************************** Release Mem & Finalize MPI *************************************/
   free(u);	free(v);	free(w);
   free(uu);	free(uv);	free(vv);	free(vw);	free(ww);	free(uw);
@@ -316,8 +319,7 @@ int main(int narg, char **args) {
 }
 
 
-// Functions Def
-
+/*============================================= Functions Def =============================================*/
 void print_array( double *work, int insize, int elem_per_proc, int rank, char string[100] ) {
 
 	//Print work row-wise
