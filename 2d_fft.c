@@ -2,8 +2,8 @@
 	 * 																											  *
 	 * 								2D FFT with Pencil Decomposition in MPI Space								  *
 	 * 																											  *
-	 **************************************************************************************************************/
-//*	Author: Mirco Meazzo */
+	 **************************************************************************************************************
+																							Author: Mirco Meazzo */
 #include <mpi.h>
 #include <math.h>
 #include <stdlib.h>
@@ -19,8 +19,8 @@ void f_FFT( double *work, int elem_per_proc, int N_trasf);
 void check_results( double *work, double *work_ref, int elem_per_proc);
 void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int nmid, int nslow, int rank);
 
-int main(int narg, char **args) {
 
+int main(int narg, char **args) {
 
   // setup MPI
   MPI_Init(&narg,&args);
@@ -79,7 +79,6 @@ int main(int narg, char **args) {
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, in_ilo, in_jlo, in_klo, in_ihi, in_jhi, in_khi );
 
-
   // partition Output grid into Npfast x Npmid x Npslow
   int out_klo = (int) 1.0*ipfast*nfast/npfast;					// K fast
   int out_khi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
@@ -99,7 +98,7 @@ int main(int narg, char **args) {
   memoryflag = 1;		// Self-allocate the buffers
 
 
-  /****************************************** Sizing Variables *****************************************/
+  /******************************************* Size Variables ******************************************/
   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
@@ -143,7 +142,9 @@ int main(int narg, char **args) {
   }
   //Send chunks of array Velocity to all processors
   MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, v, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Scatter( W, elem_per_proc , MPI_DOUBLE, w, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
  // print_array( w, insize, N_trasf, rank, "Initialized Values");
 
@@ -169,10 +170,9 @@ int main(int narg, char **args) {
   // Transpose#1
   double timer_trasp_b = 0.0, TIMER_TRASP_b = 0.0;
   timer_trasp_b -= MPI_Wtime();
-  remap3d_remap(remap_backward,u,u,sendbuf,recvbuf);
-  remap3d_remap(remap_backward,v,v,sendbuf,recvbuf);
-  remap3d_remap(remap_backward,w,w,sendbuf,recvbuf);
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_backward,u,u,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_backward,v,v,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_backward,w,w,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_trasp_b += MPI_Wtime();
 
 
@@ -230,10 +230,12 @@ int main(int narg, char **args) {
   // Transpose#2
   double timer_trasp_f = 0.0, TIMER_TRASP_f = 0.0;
   timer_trasp_f -= MPI_Wtime();
-  remap3d_remap(remap_forward,uu,uu,sendbuf,recvbuf); 	remap3d_remap(remap_forward,uv,uv,sendbuf,recvbuf);
-  remap3d_remap(remap_forward,vv,vv,sendbuf,recvbuf);	remap3d_remap(remap_forward,vw,vw,sendbuf,recvbuf);
-  remap3d_remap(remap_forward,ww,ww,sendbuf,recvbuf);	remap3d_remap(remap_forward,uw,uw,sendbuf,recvbuf);
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_forward,uu,uu,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_forward,uv,uv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_forward,vv,vv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_forward,vw,vw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_forward,ww,ww,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_forward,uw,uw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_trasp_f += MPI_Wtime();
 
 
