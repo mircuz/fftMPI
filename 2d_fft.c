@@ -34,7 +34,7 @@ int main(int narg, char **args) {
 
   // Modes
   int nfast,nmid,nslow;
-  nfast = nmid = nslow = 10;
+  nfast = nmid = nslow = 4;
 
 
   // Algorithm to factor Nprocs into roughly cube roots
@@ -162,8 +162,10 @@ int main(int narg, char **args) {
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   double timer_b1 = 0.0;
   timer_b1 -= MPI_Wtime();
-  b_FFT( u, elem_per_proc, N_trasf );	b_FFT( v, elem_per_proc, N_trasf );		b_FFT( w, elem_per_proc, N_trasf );
-  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  b_FFT( u, elem_per_proc, N_trasf );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  b_FFT( v, elem_per_proc, N_trasf );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  b_FFT( w, elem_per_proc, N_trasf );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+
   timer_b1 += MPI_Wtime();
 
 
@@ -180,7 +182,9 @@ int main(int narg, char **args) {
   double timer_b2 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_b2 -= MPI_Wtime();
-  b_FFT( u, elem_per_proc, N_trasf );	b_FFT( v, elem_per_proc, N_trasf );	b_FFT( w, elem_per_proc, N_trasf );
+  b_FFT( u, elem_per_proc, N_trasf );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  b_FFT( v, elem_per_proc, N_trasf );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  b_FFT( w, elem_per_proc, N_trasf );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_b2 += MPI_Wtime();
 
 
@@ -204,6 +208,7 @@ int main(int narg, char **args) {
   }
   timer_conv += MPI_Wtime();
   //print_array( uu, insize, N_trasf, rank, "UU performed");
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
 
   /************************************************ forward FFTs *********************************************/
@@ -220,10 +225,12 @@ int main(int narg, char **args) {
   double timer_f1 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f1 -= MPI_Wtime();
-  f_FFT( uu, elem_per_proc, N_trasf );	 f_FFT( uv, elem_per_proc, N_trasf );
-  f_FFT( vv, elem_per_proc, N_trasf );	 f_FFT( vw, elem_per_proc, N_trasf );
-  f_FFT( ww, elem_per_proc, N_trasf );	 f_FFT( uw, elem_per_proc, N_trasf );
-  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( uu, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( uv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( vv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( vw, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( ww, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( uw, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f1 += MPI_Wtime();
 
 
@@ -243,15 +250,18 @@ int main(int narg, char **args) {
   double timer_f2 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f2 -= MPI_Wtime();
-  f_FFT( uu, elem_per_proc, N_trasf ); 	f_FFT( uv, elem_per_proc, N_trasf );
-  f_FFT( vv, elem_per_proc, N_trasf );	f_FFT( vw, elem_per_proc, N_trasf );
-  f_FFT( ww, elem_per_proc, N_trasf );	f_FFT( uw, elem_per_proc, N_trasf );
+  f_FFT( uu, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( uv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( vv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( vw, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( ww, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  f_FFT( uw, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f2 += MPI_Wtime();
 
 
   // Finalize plan
   remap3d_destroy(remap_forward);
-  //print_array( uw, insize, N_trasf, rank, "Second Transpose Results UU");
+  //print_array( uu, insize, N_trasf, rank, "Results UU");
 
 
   /************************************************ Print Stats *********************************************/
