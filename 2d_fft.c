@@ -75,7 +75,7 @@ int main(int narg, char **args) {
   in_klo = (int) 1.0*ipslow*nslow/npslow;						// K slow
   in_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
 
-  printf("[BEFORE TRANSPOSITION]\t"
+  printf("[BEFORE TRANSPOSITION] (i,j,k order)\t"
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, in_ilo, in_jlo, in_klo, in_ihi, in_jhi, in_khi );
 
@@ -87,7 +87,7 @@ int main(int narg, char **args) {
   int out_jlo = (int) 1.0*ipslow*nslow/npslow;					// J slow
   int out_jhi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
 
-  printf("[AFTER TRANSPOSITION]\t"
+  printf("[AFTER TRANSPOSITION] (k,i,j order)\t"
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
 
@@ -104,7 +104,11 @@ int main(int narg, char **args) {
   int remapsize = (insize > outsize) ? insize : outsize;
   int elem_per_proc = (nfast*nmid*nslow)*2 /size;
   int N_trasf = nfast;
+  int i_length = in_ihi+1 - in_ilo;
+  int j_length = in_jhi+1 - in_jlo;
+  int k_length = in_khi+1 - in_klo;
 
+  printf("pencil dimensions (%d,%d,%d) on rank %d\n", i_length, j_length, k_length, rank);
 
   /******************************************** Memory Alloc *******************************************/
   FFT_SCALAR *u = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
@@ -284,7 +288,7 @@ int main(int narg, char **args) {
   MPI_Allreduce(&timer_f2, &TIMER_f2,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_conv, &TIMER_conv,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Gather( uu, elem_per_proc, MPI_DOUBLE, UU, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+/*  MPI_Gather( uu, elem_per_proc, MPI_DOUBLE, UU, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( uv, elem_per_proc, MPI_DOUBLE, UV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -295,7 +299,7 @@ int main(int narg, char **args) {
   MPI_Gather( ww, elem_per_proc, MPI_DOUBLE, WW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Gather( uw, elem_per_proc, MPI_DOUBLE, UW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-
+*/
   // Print stats
   if (rank == 0) {
 	  printf("\n-----------------------------------------------------------\n");
@@ -305,7 +309,7 @@ int main(int narg, char **args) {
   	  printf("%lgs employed to transpose the array (forward) \n", TIMER_TRASP_f);
   	  printf("%lgs employed to perform convolutions \n", TIMER_conv);
   	  printf("-----------------------------------------------------------\n\n");
-  	  // Disk files
+/*  	  // Disk files
   	  printf("Saving data on disk...\n");
   	  FILE *UU_dat, *UV_dat, *VV_dat, *VW_dat, *WW_dat, *UW_dat;
   	  UU_dat = fopen( "uu.dat", "w+");		UV_dat = fopen( "uv.dat", "w+");
@@ -316,9 +320,8 @@ int main(int narg, char **args) {
   		  fprintf( VV_dat, "%lf\n", VV[i]);		fprintf( VW_dat, "%lf\n", VW[i]);
   		  fprintf( WW_dat, "%lf\n", WW[i]);		fprintf( UW_dat, "%lf\n", UW[i]);
   	  }
-  	  printf("Process Ended\n");
+*/  	  printf("Process Ended\n");
   }
-
 
   /**************************************** Release Mem & Finalize MPI *************************************/
   free(u);	free(v);	free(w);
