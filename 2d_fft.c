@@ -62,7 +62,7 @@ int main(int narg, char **args) {
 
 
   /******************************************** Remap Variables *******************************************/
-  // partition Input grid into Npfast x Npmid x Npslow
+  // partitioning in x-pencil
   int ipfast = rank % npfast;
   int ipmid = (rank/npfast) % npmid;
   int ipslow = rank / (npfast*npmid);
@@ -79,7 +79,7 @@ int main(int narg, char **args) {
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, in_ilo, in_jlo, in_klo, in_ihi, in_jhi, in_khi );
 
-  // partition Output grid into Npfast x Npmid x Npslow
+  // partitioning in z-pencil
   int out_klo = (int) 1.0*ipfast*nfast/npfast;					// K fast
   int out_khi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
   int out_ilo = (int) 1.0*ipmid*nmid/npmid;						// I med
@@ -90,6 +90,19 @@ int main(int narg, char **args) {
   printf("[AFTER TRANSPOSITION] (k,i,j order)\t"
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
+
+  // partitioning in y-pencil
+  int outy_jlo = (int) 1.0*ipfast*nfast/npfast;						// J fast
+  int outy_jhi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
+  int outy_ilo = (int) 1.0*ipmid*nmid/npmid;						// I med
+  int outy_ihi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
+  int outy_klo = (int) 1.0*ipslow*nslow/npslow;						// K slow
+  int outy_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
+
+  printf("[Y-TRANSPOSITION] (j,k,i order)\t"
+  		  "On rank %d the coordinates are: "
+		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, outy_ilo, outy_jlo, outy_klo, outy_ihi, outy_jhi, outy_khi );
+
 
   void *remap_zpencil, *remap_xpencil, *remap_ypencil;
   int nqty, permute, memoryflag, sendsize, recvsize;
@@ -108,7 +121,7 @@ int main(int narg, char **args) {
   int j_length = in_jhi+1 - in_jlo;
   int k_length = in_khi+1 - in_klo;
 
-  printf("pencil dimensions (%d,%d,%d) on rank %d\n", i_length, j_length, k_length, rank);
+//  printf("pencil dimensions (%d,%d,%d) on rank %d\n", i_length, j_length, k_length, rank);
 
   /******************************************** Memory Alloc *******************************************/
   FFT_SCALAR *u = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
@@ -276,29 +289,15 @@ int main(int narg, char **args) {
 
 
   /************************************************ y-Transpose *********************************************/
-  // partitioning in y-pencil
-  int outy_ilo, outy_ihi, outy_jlo, outy_jhi, outy_klo, outy_khi;
-
-  outy_jlo = (int) 1.0*ipfast*nfast/npfast;						// J fast
-  outy_jhi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
-  outy_ilo = (int) 1.0*ipmid*nmid/npmid;						// I med
-  outy_ihi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
-  outy_klo = (int) 1.0*ipslow*nslow/npslow;						// K slow
-  outy_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
-
-  printf("[Y-TRANSPOSITION] (j,k,i order)\t"
-		  "On rank %d the coordinates are: "
-  		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, outy_ilo, outy_jlo, outy_klo, outy_ihi, outy_jhi, outy_khi );
-
-
-  // ----------------------------------------- Setup y-Transpose ------------------------------------------
+  // -------------------------------------------- Setup y-Transpose ------------------------------------------
   remap3d_create( remap_comm , &remap_ypencil);
   permute = 1;
   remap3d_setup( remap_ypencil,
 		  	  	  in_ilo,  in_ihi,  in_jlo, in_jhi,  in_klo,  in_khi,
 				  outy_ilo,  outy_ihi,  outy_jlo, outy_jhi,  outy_klo,  outy_khi,
 				  nqty, permute, memoryflag, &sendsize, &recvsize);
-  // -----------------------------------------------------------------------------------------------------------
+  //----------------------------------------------------------------------------------------------------------
+
   double timer_trasp_y = 0.0, TIMER_TRASP_y = 0.0;
   timer_trasp_y -= MPI_Wtime();
   //remap3d_remap(remap_ypencil,u,u,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
