@@ -91,7 +91,7 @@ int main(int narg, char **args) {
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
 
-  void *remap_backward, *remap_forward;
+  void *remap_zpencil, *remap_xpencil, *remap_ypencil;
   int nqty, permute, memoryflag, sendsize, recvsize;
   nqty = 2;			// Use couples of real numbers per grid point
   permute = 2;  		// From x-contiguous to z-contiguous arrays
@@ -150,13 +150,13 @@ int main(int narg, char **args) {
   MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, v, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Scatter( W, elem_per_proc , MPI_DOUBLE, w, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
- // print_array( w, insize, N_trasf, rank, "Initialized Values");
+  //print_array( u, insize, N_trasf, rank, "Initialized Values");
 
 
   /************************************************ backward FFTs *********************************************/
-  // ---------------------------------------- Setup Backward Transpose -----------------------------------------
-  remap3d_create( remap_comm , &remap_backward);
-  remap3d_setup( remap_backward,
+  // ------------------------------------------- Setup z-Transpose --------------------------------------------
+  remap3d_create( remap_comm , &remap_zpencil);
+  remap3d_setup( remap_zpencil,
       		  	  in_ilo,  in_ihi,  in_jlo, in_jhi,  in_klo,  in_khi,
 				  out_ilo,  out_ihi,  out_jlo, out_jhi,  out_klo,  out_khi,
       			  nqty, permute, memoryflag, &sendsize, &recvsize);
@@ -174,12 +174,12 @@ int main(int narg, char **args) {
 
 
   // Transpose#1
-  double timer_trasp_b = 0.0, TIMER_TRASP_b = 0.0;
-  timer_trasp_b -= MPI_Wtime();
-  remap3d_remap(remap_backward,u,u,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  remap3d_remap(remap_backward,v,v,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  remap3d_remap(remap_backward,w,w,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  timer_trasp_b += MPI_Wtime();
+  double timer_trasp_z = 0.0, TIMER_TRASP_z = 0.0;
+  timer_trasp_z -= MPI_Wtime();
+  remap3d_remap(remap_zpencil,u,u,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_zpencil,v,v,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_zpencil,w,w,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_trasp_z += MPI_Wtime();
 
 
   // Backward FFT#2
@@ -193,7 +193,7 @@ int main(int narg, char **args) {
 
 
   //Finalize plan
-  remap3d_destroy(remap_backward);
+  remap3d_destroy(remap_zpencil);
   //print_array( u, insize, N_trasf, rank, "First Transpose of U performed");
   //print_array( w, insize, N_trasf, rank, "First Transpose of W performed");
 
@@ -216,10 +216,10 @@ int main(int narg, char **args) {
 
 
   /************************************************ forward FFTs *********************************************/
-  // ---------------------------------------- Setup Forward Transpose -----------------------------------------
-  remap3d_create( remap_comm , &remap_forward);
+  // ---------------------------------------- Setup x-Transpose -----------------------------------------
+  remap3d_create( remap_comm , &remap_xpencil);
   permute = 1; 		// From z-contiguous to x-contiguous arrays
-  remap3d_setup( remap_forward,
+  remap3d_setup( remap_xpencil,
 		  	  	  out_klo,  out_khi, out_ilo,  out_ihi,  out_jlo, out_jhi,
 				  in_klo,  in_khi, in_ilo,  in_ihi,  in_jlo, in_jhi,
 				  nqty, permute, memoryflag, &sendsize, &recvsize);
@@ -229,6 +229,8 @@ int main(int narg, char **args) {
   double timer_f1 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f1 -= MPI_Wtime();
+  //f_FFT( u, elem_per_proc, N_trasf );
+
   f_FFT( uu, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   f_FFT( uv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   f_FFT( vv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -239,21 +241,25 @@ int main(int narg, char **args) {
 
 
   // Transpose#2
-  double timer_trasp_f = 0.0, TIMER_TRASP_f = 0.0;
-  timer_trasp_f -= MPI_Wtime();
-  remap3d_remap(remap_forward,uu,uu,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  remap3d_remap(remap_forward,uv,uv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  remap3d_remap(remap_forward,vv,vv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  remap3d_remap(remap_forward,vw,vw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  remap3d_remap(remap_forward,ww,ww,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  remap3d_remap(remap_forward,uw,uw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  timer_trasp_f += MPI_Wtime();
+  double timer_trasp_x = 0.0, TIMER_TRASP_x = 0.0;
+  timer_trasp_x -= MPI_Wtime();
+  //remap3d_remap(remap_xpencil,u,u,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+
+  remap3d_remap(remap_xpencil,uu,uu,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_xpencil,uv,uv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_xpencil,vv,vv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_xpencil,vw,vw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_xpencil,ww,ww,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_xpencil,uw,uw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_trasp_x += MPI_Wtime();
 
 
   // Forward FFT#2
   double timer_f2 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f2 -= MPI_Wtime();
+  //f_FFT( u, elem_per_proc, N_trasf );
+
   f_FFT( uu, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   f_FFT( uv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   f_FFT( vv, elem_per_proc, N_trasf );	 MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -264,8 +270,51 @@ int main(int narg, char **args) {
 
 
   // Finalize plan
-  remap3d_destroy(remap_forward);
-  //print_array( uu, insize, N_trasf, rank, "Results UU");
+  remap3d_destroy(remap_xpencil);
+  MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+ // print_array( u, insize, N_trasf, rank, "Results UU");
+
+
+  /************************************************ y-Transpose *********************************************/
+  // partitioning in y-pencil
+  int outy_ilo, outy_ihi, outy_jlo, outy_jhi, outy_klo, outy_khi;
+
+  outy_jlo = (int) 1.0*ipfast*nfast/npfast;						// J fast
+  outy_jhi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
+  outy_ilo = (int) 1.0*ipmid*nmid/npmid;						// I med
+  outy_ihi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
+  outy_klo = (int) 1.0*ipslow*nslow/npslow;						// K slow
+  outy_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
+
+  printf("[Y-TRANSPOSITION] (j,k,i order)\t"
+		  "On rank %d the coordinates are: "
+  		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, outy_ilo, outy_jlo, outy_klo, outy_ihi, outy_jhi, outy_khi );
+
+
+  // ----------------------------------------- Setup y-Transpose ------------------------------------------
+  remap3d_create( remap_comm , &remap_ypencil);
+  permute = 1;
+  remap3d_setup( remap_ypencil,
+		  	  	  in_ilo,  in_ihi,  in_jlo, in_jhi,  in_klo,  in_khi,
+				  outy_ilo,  outy_ihi,  outy_jlo, outy_jhi,  outy_klo,  outy_khi,
+				  nqty, permute, memoryflag, &sendsize, &recvsize);
+  // -----------------------------------------------------------------------------------------------------------
+  double timer_trasp_y = 0.0, TIMER_TRASP_y = 0.0;
+  timer_trasp_y -= MPI_Wtime();
+  //remap3d_remap(remap_ypencil,u,u,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+
+  remap3d_remap(remap_ypencil,uu,uu,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_ypencil,uv,uv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_ypencil,vv,vv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_ypencil,vw,vw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_ypencil,ww,ww,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  remap3d_remap(remap_ypencil,uw,uw,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  timer_trasp_y += MPI_Wtime();
+
+
+  //Finalize plan
+  remap3d_destroy(remap_ypencil);
+  //print_array( u, insize, N_trasf, rank, "y-Transpose of U performed");
 
 
   /************************************************ Print Stats *********************************************/
@@ -280,8 +329,9 @@ int main(int narg, char **args) {
 
   // Gather all stats
   double TIMER_b1, TIMER_b2, TIMER_f1, TIMER_f2, TIMER_conv;
-  MPI_Allreduce(&timer_trasp_f, &TIMER_TRASP_f,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
-  MPI_Allreduce(&timer_trasp_b, &TIMER_TRASP_b,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_trasp_x, &TIMER_TRASP_x,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_trasp_z, &TIMER_TRASP_z,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
+  MPI_Allreduce(&timer_trasp_y, &TIMER_TRASP_y,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_b1, &TIMER_b1,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_b2, &TIMER_b2,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_f1, &TIMER_f1,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
@@ -304,10 +354,11 @@ int main(int narg, char **args) {
   if (rank == 0) {
 	  printf("\n-----------------------------------------------------------\n");
 	  printf("%lgs employed to perform 2D FFT (backward) \n", TIMER_b1 +TIMER_b2);
-	  printf("%lgs employed to transpose the array (backward) \n", TIMER_TRASP_b);
+	  printf("%lgs employed to transpose the array (z-pencil) \n", TIMER_TRASP_z);
 	  printf("%lgs employed to perform 2D FFT (forward) \n", TIMER_f1 +TIMER_f2);
-  	  printf("%lgs employed to transpose the array (forward) \n", TIMER_TRASP_f);
+  	  printf("%lgs employed to transpose the array (x-pencil) \n", TIMER_TRASP_x);
   	  printf("%lgs employed to perform convolutions \n", TIMER_conv);
+  	  printf("%lgs employed to transpose the array (y-pencil) \n", TIMER_TRASP_y);
   	  printf("-----------------------------------------------------------\n\n");
 /*  	  // Disk files
   	  printf("Saving data on disk...\n");
