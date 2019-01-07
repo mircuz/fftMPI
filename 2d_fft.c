@@ -18,9 +18,8 @@ void b_FFT( double *work, int elem_per_proc, int N_trasf);
 void f_FFT( double *work, int elem_per_proc, int N_trasf);
 void check_results( double *work, double *work_ref, int elem_per_proc);
 void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int nmid, int nslow, int rank);
-int fft_fitting(int nx);
 
-#define MODES 12;
+#define MODES 10;
 
 int main(int narg, char **args) {
 
@@ -38,11 +37,13 @@ int main(int narg, char **args) {
   modes = MODES;
   int nxd_AA = (modes*3)/2;
   // fftFitting
-  int nxd = modes*2;
-  int nzd = modes*4;
-
-  nxd= fft_fitting(nxd_AA);
-  nzd= fft_fitting(nzd);
+  int nxd = 4; int nzd = 4;
+  while ( nxd < nxd_AA ) {
+	  nxd = nxd*2;
+  }
+  while ( nzd < modes*2+1 ) {
+	  nzd = nzd*2;
+  }
 
   // Length of the array along directions
   int i_length = nxd;
@@ -337,7 +338,7 @@ int main(int narg, char **args) {
 
   //Finalize plan
   remap3d_destroy(remap_ypencil);
-  print_array( u, insize, j_length, rank, "y-Transpose of U performed");
+  //print_array( u, insize, j_length, rank, "y-Transpose of U performed");
 
 
   /************************************************ Print Stats *********************************************/
@@ -589,12 +590,5 @@ void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int
 
 }
 
-int fft_fitting(int nx) {
 
-	int nxd=4;
 
-	while ( nxd < nx ) {
-		nxd = nxd*2;
-	}
-	return nxd;
-}

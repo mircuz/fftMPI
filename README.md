@@ -1,7 +1,8 @@
 # Validation test for a 2D FFT.
 
-
-### Antialiasing not completed! Need function to fill the array with zeros over number of modes 
+##TODO
+### -Antialiasing not completed! Need function to fill the array with zeros over number of modes 
+### -Still no cut after Forward FFT and consequent transposition. Need to reduce the array to nx*ny*nz modes only 
 
 
 
