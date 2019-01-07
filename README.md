@@ -1,5 +1,10 @@
 # Validation test for a 2D FFT.
 
+
+### Antialiasing not completed! Need function to fill the array with zeros over number of modes 
+
+
+
 This script does a pencil decomposition and perform a 2D FFT along x and z dimensions
 on a complex dataset.
 
