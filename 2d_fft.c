@@ -19,7 +19,7 @@ void f_FFT( double *work, int elem_per_proc, int N_trasf);
 void check_results( double *work, double *work_ref, int elem_per_proc);
 void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int nmid, int nslow, int rank);
 
-#define MODES 10;
+#define MODES 4;
 
 int main(int narg, char **args) {
 
@@ -33,26 +33,27 @@ int main(int narg, char **args) {
   MPI_Comm_rank(world,&rank);
 
   // Antialias along x
-  int modes, nfast,nmid,nslow;
+  int modes, nfast,nmid,nslow, nx,ny,nz;
   modes = MODES;
-  int nxd_AA = (modes*3)/2;
+  nx = modes +1;	ny = modes+4;	nz = 2*modes+1;
+  int nxd_AA = (nx*3)/2;
   // fftFitting
   int nxd = 4; int nzd = 4;
   while ( nxd < nxd_AA ) {
 	  nxd = nxd*2;
   }
-  while ( nzd < modes*2+1 ) {
+  while ( nzd < nz ) {
 	  nzd = nzd*2;
   }
 
   // Length of the array along directions
   int i_length = nxd;
-  int j_length = modes;
+  int j_length = ny;
   int k_length = nzd;
 
   // TOTAL Modes
   nfast = nxd;
-  nmid = modes;
+  nmid = ny;
   nslow = nzd;
 
   // Algorithm to factor Nprocs into roughly cube roots
@@ -77,7 +78,7 @@ int main(int narg, char **args) {
   	  printf("\n=======================================================\n"
   			  "2D FFT with %dx%dx%d total modes (%d,%d,%d) on %d procs, %dx%dx%d grid\t\n"
   			"=======================================================\n\n",
-  			  nfast,nmid,nslow,modes,modes,modes,size,npfast,npmid,npslow);
+  			  nfast,nmid,nslow,nx,ny,nz,size,npfast,npmid,npslow);
     }
 
 
@@ -101,7 +102,7 @@ int main(int narg, char **args) {
 
   nfast = nzd;
   nmid = nxd;
-  nslow = modes;
+  nslow = ny;
 
   // partitioning in z-pencil
   int out_klo = (int) 1.0*ipfast*nfast/npfast;					// K fast
@@ -114,8 +115,8 @@ int main(int narg, char **args) {
   printf("[Z-PENCIL] (k,i,j order)\t"
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
-
-  nfast = modes;
+//--------------------------------------------------------------------- -----------------------//
+  nfast = ny;
   nmid = nxd;
   nslow = nzd;
 
@@ -126,8 +127,8 @@ int main(int narg, char **args) {
   int outy_ihi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
   int outy_klo = (int) 1.0*ipslow*nslow/npslow;						// K slow
   int outy_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
+  printf("[Y-PENCIL] (j,i,k order)\t"
 
-  printf("[Y-PENCIL] (j,k,i order)\t"
   		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, outy_ilo, outy_jlo, outy_klo, outy_ihi, outy_jhi, outy_khi );
 
@@ -143,9 +144,14 @@ int main(int narg, char **args) {
   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
-  int elem_per_proc = (nfast*nmid*nslow)*2 /size;
+  int elem_per_proc = (nxd*ny*nzd)*2 /size;
 
-  //printf("pencil dimensions (%d,%d,%d) on rank %d\n", i_length, j_length, k_length, rank);
+  int i_loc_length, j_loc_length, k_loc_length;
+  i_loc_length = outy_ihi - outy_ilo +1;
+  j_loc_length = outy_jhi - outy_jlo +1;
+  k_loc_length = outy_khi - outy_klo +1;
+
+  printf("y-pencil dimensions (%d,%d,%d) on rank %d\n", i_loc_length, j_loc_length, k_loc_length, rank);
 
   /******************************************** Memory Alloc *******************************************/
   FFT_SCALAR *u = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
@@ -163,23 +169,61 @@ int main(int narg, char **args) {
 
   /********************************************* Memory filling ********************************************/
   // Allocate the arrays
-  FFT_SCALAR *V, *U, *W;
-  U = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
-  V = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
-  W = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  FFT_SCALAR *V, *U, *W, *U_read, *V_read, *W_read;
+  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+  U = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+  V = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+  W = (FFT_SCALAR*) malloc( nxd*ny*nzd*2*2* sizeof(FFT_SCALAR));
+
 
   if (rank == 0) {
 	  //On rank 0 read the dataset
 	  FILE *U_dat;	U_dat = fopen( "u.dat", "r");
 	  FILE *V_dat;	V_dat = fopen( "v.dat", "r");
 	  FILE *W_dat;	W_dat = fopen( "w.dat", "r");
-	  //Fill the allocated arrays
-	  for ( int i = 0; i < nfast*nmid*nslow*2; i++) {
-		  fscanf( U_dat, "%lf", &U[i]);
-		  fscanf( V_dat, "%lf", &V[i]);
-		  fscanf( W_dat, "%lf", &W[i]);
-		  //printf("I've read %lf\n", U[i]);
+	  for ( int i = 0; i < (nx)*(ny)*(nz)*2; i++) {
+		  fscanf( U_dat, "%lf", &U_read[i]);
+		  fscanf( V_dat, "%lf", &V_read[i]);
+		  fscanf( W_dat, "%lf", &W_read[i]);
+		  //printf("I've read %lf\n", U_read[i]);
 	  }
+
+	  //Fill the array with read values and zeros for AA
+	  int i, stride_y, stride_z, reader=0, last_index;
+	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+		 // printf("\n\nstride z %d", stride_z );
+	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+	  		//printf("\nstride y %d", stride_y );
+			  for ( i = 0; i < (nx)*2; i++) {
+	  			  U[stride_z + stride_y+i] = U_read[reader];
+	  			  V[stride_z + stride_y+i] = V_read[reader];
+	  			  W[stride_z + stride_y+i] = W_read[reader];
+	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+	  			  reader++;
+	  		  }
+	  		  for ( i = (nx)*2; i < nxd*2; i++) {
+	  			  U[stride_z + stride_y+i] = 0;
+	  			  V[stride_z + stride_y+i] = 0;
+	  			  W[stride_z + stride_y+i] = 0;
+	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+	  		  }
+	  	  }
+	  	  last_index = stride_z + stride_y;
+	  }
+	  //Fill with zeros from nz to nzd
+	  for ( int i = last_index; i < nzd*nxd*ny*2; i++) {
+		  U[i] = 0;
+		  V[i] = 0;
+		  W[i] = 0;
+	  }
+
+	 /* for ( int i =0; i < nxd*nzd*ny*2; i++) {
+		  printf("U[%d] =  %g\n", i/2, U[i]);
+	  }
+	 */
+
   }
   //Send chunks of array Velocity to all processors
   MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -338,7 +382,7 @@ int main(int narg, char **args) {
 
   //Finalize plan
   remap3d_destroy(remap_ypencil);
-  //print_array( u, insize, j_length, rank, "y-Transpose of U performed");
+  print_array( u, insize, j_length, rank, "y-Transpose of U performed");
 
 
   /************************************************ Print Stats *********************************************/
