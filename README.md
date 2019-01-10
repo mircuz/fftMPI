@@ -1,10 +1,5 @@
 # Validation test for a 2D FFT.
 
-##TODO
-### -Antialiasing not completed! Need function to fill the array with zeros over number of modes 
-### -Still no cut after Forward FFT and consequent transposition. Need to reduce the array to nx*ny*nz modes only 
-
-
 
 This script does a pencil decomposition and perform a 2D FFT along x and z dimensions
 on a complex dataset.
@@ -22,9 +17,13 @@ At this point convolutions are performed.
 Then the transpose, for the convolved arrays, is setted up.
 Once again we performe a 1D FFT, followed by transpose and another 1D FFT.
 
+Since the final transposition in y-pencil is made on the whole array the output have also the alias modes. You must create a cycle to extract only the needed modes.
+
 The results check function is implemented, but turned off since the
 convolutions take place. To use it, just copy the portions of code following the
 instructions and turn off the convolutions.
+
+
 
 Feel free to modify everything, I do not give warranty for anything!
 
