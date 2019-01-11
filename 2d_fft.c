@@ -75,9 +75,9 @@ int main(int narg, char **args) {
 
 
   if (rank == 0) {
-  	  printf("\n=======================================================\n"
-  			  "2D FFT with %dx%dx%d total modes (%d,%d,%d) on %d procs, %dx%dx%d grid\t\n"
-  			"=======================================================\n\n",
+  	  printf("\n========================================================================================\n"
+  			  "\t2D FFT with %dx%dx%d total modes (%d,%d,%d) on %d procs, %dx%dx%d grid\t\n"
+  			"========================================================================================\n\n",
   			  nfast,nmid,nslow,nx,ny,nz,size,npfast,npmid,npslow);
     }
 
@@ -115,22 +115,10 @@ int main(int narg, char **args) {
   printf("[Z-PENCIL] (k,i,j order)\t"
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
-//--------------------------------------------------------------------- -----------------------//
+
   nfast = ny;
   nmid = nxd;
   nslow = nzd;
-
-  // partitioning in y-pencil
-  int outy_jlo = (int) 1.0*ipfast*nfast/npfast;						// J fast
-  int outy_jhi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
-  int outy_ilo = (int) 1.0*ipmid*nmid/npmid;						// I med
-  int outy_ihi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
-  int outy_klo = (int) 1.0*ipslow*nslow/npslow;						// K slow
-  int outy_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
-  printf("[Y-PENCIL] (j,i,k order)\t"
-
-  		  "On rank %d the coordinates are: "
-		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, outy_ilo, outy_jlo, outy_klo, outy_ihi, outy_jhi, outy_khi );
 
 
   void *remap_zpencil, *remap_xpencil, *remap_ypencil;
@@ -145,13 +133,6 @@ int main(int narg, char **args) {
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
   int elem_per_proc = (nxd*ny*nzd)*2 /size;
-
-  int i_loc_length, j_loc_length, k_loc_length;
-  i_loc_length = outy_ihi - outy_ilo +1;
-  j_loc_length = outy_jhi - outy_jlo +1;
-  k_loc_length = outy_khi - outy_klo +1;
-
-  printf("y-pencil dimensions (%d,%d,%d) on rank %d\n", i_loc_length, j_loc_length, k_loc_length, rank);
 
   /******************************************** Memory Alloc *******************************************/
   FFT_SCALAR *u = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
@@ -168,17 +149,16 @@ int main(int narg, char **args) {
 
 
   /********************************************* Memory filling ********************************************/
-  // Allocate the arrays
-  FFT_SCALAR *V, *U, *W, *U_read, *V_read, *W_read;
-  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
-  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
-  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
-  U = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
-  V = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
-  W = (FFT_SCALAR*) malloc( nxd*ny*nzd*2*2* sizeof(FFT_SCALAR));
-
+  // Declare variables, on all procs, needed to Scatter data
+  FFT_SCALAR *V, *U, *W;
 
   if (rank == 0) {
+	  // Allocate the arrays
+	  FFT_SCALAR  *U_read, *V_read, *W_read;
+	  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+	  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+	  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+
 	  //On rank 0 read the dataset
 	  FILE *U_dat;	U_dat = fopen( "u.dat", "r");
 	  FILE *V_dat;	V_dat = fopen( "v.dat", "r");
@@ -190,12 +170,17 @@ int main(int narg, char **args) {
 		  //printf("I've read %lf\n", U_read[i]);
 	  }
 
+	  // Allocate mememory needed to Scatter data only on the broadcaster
+	  U = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+	  V = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+	  W = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+
 	  //Fill the array with read values and zeros for AA
 	  int i, stride_y, stride_z, reader=0, last_index;
 	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
-		 // printf("\n\nstride z %d", stride_z );
+		  //printf("\n\nstride z %d\n", stride_z );
 	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
-	  		//printf("\nstride y %d", stride_y );
+	  		//printf("\nstride y %d\n", stride_y );
 			  for ( i = 0; i < (nx)*2; i++) {
 	  			  U[stride_z + stride_y+i] = U_read[reader];
 	  			  V[stride_z + stride_y+i] = V_read[reader];
@@ -218,12 +203,7 @@ int main(int narg, char **args) {
 		  V[i] = 0;
 		  W[i] = 0;
 	  }
-
-	 /* for ( int i =0; i < nxd*nzd*ny*2; i++) {
-		  printf("U[%d] =  %g\n", i/2, U[i]);
-	  }
-	 */
-
+	  free(U_read);		free(V_read);		free(W_read);
   }
   //Send chunks of array Velocity to all processors
   MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -357,7 +337,131 @@ int main(int narg, char **args) {
   //print_array( u, insize, i_length, rank, "Results UU");
 
 
+  /*********************************************** Modes cutting ********************************************/
+  double TIMER_AA = 0.0;
+  TIMER_AA -= MPI_Wtime();
+
+  // Alloc memory for the global output
+  FFT_SCALAR *UU, *UV, *VV, *VW, *WW, *UW;
+  UU = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  UV = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  VV = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  VW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  WW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+  UW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
+
+  // Gather all data on rank 0
+  MPI_Gather( u, elem_per_proc, MPI_DOUBLE, U, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+
+  MPI_Gather( uu, elem_per_proc, MPI_DOUBLE, UU, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( uv, elem_per_proc, MPI_DOUBLE, UV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( vv, elem_per_proc, MPI_DOUBLE, VV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( vw, elem_per_proc, MPI_DOUBLE, VW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( ww, elem_per_proc, MPI_DOUBLE, WW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Gather( uw, elem_per_proc, MPI_DOUBLE, UW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+
+  // Cut all modes above nx & nz
+  if (rank == 0) {
+	  int i, stride_y, stride_z, reader=0, last_index;
+	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+   		  //printf("\n\nstride z %d\n", stride_z );
+   	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+   	  		//printf("\nstride y %d\n", stride_y );
+   			  for ( i = 0; i < (nx)*2; i++) {
+   	  			  U[reader] = U[stride_z + stride_y+i];
+
+   	  			  UU[reader] = UU[stride_z + stride_y+i];
+   	  			  UV[reader] = UV[stride_z + stride_y+i];
+   	  			  VV[reader] = VV[stride_z + stride_y+i];
+   	  			  VW[reader] = VW[stride_z + stride_y+i];
+   	  			  WW[reader] = WW[stride_z + stride_y+i];
+   	  			  UW[reader] = UW[stride_z + stride_y+i];
+   	  			  //printf("U[%d] =  %g\n", (reader), U[reader]);
+   	  			  reader++;
+   	  		  }
+   	  		  for ( i = (nx)*2; i < nxd*2; i++) {
+   	  		  }
+   	  	  }
+   	  	  last_index = stride_z + stride_y;
+	  }
+  }
+
+  // Scatter data
+  elem_per_proc = nx*ny*nz*2 /size;
+  MPI_Scatter(U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved"));
+
+  MPI_Scatter(UU, elem_per_proc , MPI_DOUBLE, uu, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved"));
+  MPI_Scatter(UV, elem_per_proc , MPI_DOUBLE, uv, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved"));
+  MPI_Scatter(VV, elem_per_proc , MPI_DOUBLE, vv, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved"));
+  MPI_Scatter(VW, elem_per_proc , MPI_DOUBLE, vw, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved"));
+  MPI_Scatter(WW, elem_per_proc , MPI_DOUBLE, ww, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved"));
+  MPI_Scatter(UW, elem_per_proc , MPI_DOUBLE, uw, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved"));
+
+  TIMER_AA += MPI_Wtime();
+
+/*
+  int stride_ny=0; int stride_nz = 0;
+  if (rank == 0) {
+  for (int i = 0; i < nx*ny*nz; i++) {
+	  if ( i % (nx*2) == 0) {
+		  printf("========(ny= %d, nz= %d)=======\n", stride_ny, stride_nz);
+		  stride_ny ++;
+		  if ( stride_ny % ny == 0) {
+			  stride_ny =0;
+			  stride_nz ++;
+		  }
+	  }
+	 printf("u[%d]= %g\n", (i+rank*nx*ny*nz), u[i]);
+  }
+  }
+*/
+
   /************************************************ y-Transpose *********************************************/
+  // IN
+  nfast = nx;
+  nmid = ny;
+  nslow = nz;
+
+  // partitioning in x-pencil
+  in_ilo = (int) 1.0*ipfast*nfast/npfast;					// K fast
+  in_ihi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
+  in_jlo = (int) 1.0*ipmid*nmid/npmid;						// I med
+  in_jhi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
+  in_klo = (int) 1.0*ipslow*nslow/npslow;					// J slow
+  in_khi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
+
+  // OUT
+  nfast = ny;
+  nmid = nz;
+  nslow = nx;
+
+  // partitioning in y-pencil
+    int outy_jlo = (int) 1.0*ipfast*nfast/npfast;						// J fast
+    int outy_jhi = (int) 1.0*(ipfast+1)*nfast/npfast - 1;
+    int outy_klo = (int) 1.0*ipmid*nmid/npmid;						// I med
+    int outy_khi = (int) 1.0*(ipmid+1)*nmid/npmid - 1;
+    int outy_ilo = (int) 1.0*ipslow*nslow/npslow;						// K slow
+    int outy_ihi = (int) 1.0*(ipslow+1)*nslow/npslow - 1;
+
+  printf("[Y-PENCIL] (j,i,k order)\t"
+
+    		  "On rank %d the coordinates are: "
+  		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, outy_ilo, outy_jlo, outy_klo, outy_ihi, outy_jhi, outy_khi );
+
   // -------------------------------------------- Setup y-Transpose ------------------------------------------
   remap3d_create( remap_comm , &remap_ypencil);
   permute = 1;
@@ -366,10 +470,24 @@ int main(int narg, char **args) {
 				  outy_ilo,  outy_ihi,  outy_jlo, outy_jhi,  outy_klo,  outy_khi,
 				  nqty, permute, memoryflag, &sendsize, &recvsize);
   //----------------------------------------------------------------------------------------------------------
-
   double timer_trasp_y = 0.0, TIMER_TRASP_y = 0.0;
   timer_trasp_y -= MPI_Wtime();
   remap3d_remap(remap_ypencil,u,u,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+
+  int stride_nx=0; int stride_nz = 0;
+    if (rank == 0) {
+    for (int i = 0; i < nx*ny*nz; i++) {
+  	  if ( i % (ny*2) == 0) {
+  		  printf("========(nx= %d, nz= %d)=======\n", stride_nx, stride_nz);
+  		  stride_nx ++;
+  		  if ( stride_nx % nx == 0) {
+  			  stride_nx =0;
+  			  stride_nz ++;
+  		  }
+  	  }
+  	 printf("u[%d]= %g\n", (i+rank*nx*ny*nz), u[i]);
+    }
+    }
 
   remap3d_remap(remap_ypencil,uu,uu,sendbuf,recvbuf); 	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   remap3d_remap(remap_ypencil,uv,uv,sendbuf,recvbuf);	MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -382,18 +500,10 @@ int main(int narg, char **args) {
 
   //Finalize plan
   remap3d_destroy(remap_ypencil);
-  print_array( u, insize, j_length, rank, "y-Transpose of U performed");
-
+  insize = (outy_ihi-outy_ilo+1) * (outy_jhi-outy_jlo+1) * (outy_khi-outy_klo+1);
+  //print_array( u, insize, ny, rank, "y-Transpose of U performed");
 
   /************************************************ Print Stats *********************************************/
-  // Alloc memory for the global output
-  FFT_SCALAR *UU, *UV, *VV, *VW, *WW, *UW;
-  UU = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
-  UV = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
-  VV = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
-  VW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
-  WW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
-  UW = (FFT_SCALAR*) malloc( nfast*nmid*nslow*2* sizeof(FFT_SCALAR));
 
   // Gather all stats
   double TIMER_b1, TIMER_b2, TIMER_f1, TIMER_f2, TIMER_conv;
@@ -406,18 +516,7 @@ int main(int narg, char **args) {
   MPI_Allreduce(&timer_f2, &TIMER_f2,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Allreduce(&timer_conv, &TIMER_conv,1,MPI_DOUBLE,MPI_MAX,remap_comm); // @suppress("Symbol is not resolved")
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-/*  MPI_Gather( uu, elem_per_proc, MPI_DOUBLE, UU, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Gather( uv, elem_per_proc, MPI_DOUBLE, UV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Gather( vv, elem_per_proc, MPI_DOUBLE, VV, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Gather( vw, elem_per_proc, MPI_DOUBLE, VW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Gather( ww, elem_per_proc, MPI_DOUBLE, WW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Gather( uw, elem_per_proc, MPI_DOUBLE, UW, elem_per_proc, MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-*/
+
   // Print stats
   if (rank == 0) {
 	  printf("\n-----------------------------------------------------------\n");
@@ -426,6 +525,7 @@ int main(int narg, char **args) {
 	  printf("%lgs employed to perform 2D FFT (forward) \n", TIMER_f1 +TIMER_f2);
   	  printf("%lgs employed to transpose the array (x-pencil) \n", TIMER_TRASP_x);
   	  printf("%lgs employed to perform convolutions \n", TIMER_conv);
+  	  printf("%lgs employed to gather, cut modes & scatter data \n", TIMER_AA);
   	  printf("%lgs employed to transpose the array (y-pencil) \n", TIMER_TRASP_y);
   	  printf("-----------------------------------------------------------\n\n");
 /*  	  // Disk files
@@ -446,7 +546,7 @@ int main(int narg, char **args) {
   free(u);	free(v);	free(w);
   free(uu);	free(uv);	free(vv);	free(vw);	free(ww);	free(uw);
   free(U);	free(V);	free(W);
-  free(UU);	free(UV);	free(VV);	free(VW);	free(WW);	free(UW);
+  free(UU); free(UV);	free(VV);	free(VW);	free(WW);	free(UW);
   free(recvbuf);
   free(sendbuf);
   MPI_Finalize();
