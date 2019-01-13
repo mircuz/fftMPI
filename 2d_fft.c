@@ -389,7 +389,7 @@ int main(int narg, char **args) {
 	  }
 
 
-  /********************************************** Transpose dataset ************************************************/
+  /******************************************* Transpose dataset ******************************************/
   struct cmplx {
 	  double re, im;
   };
@@ -430,7 +430,7 @@ int main(int narg, char **args) {
   int* scounts = (int *)malloc(size*sizeof(int));
   int* receive = (int *)malloc(size*sizeof(int));
 
-  int modes_per_proc[2] = { 23, 22 };
+  int modes_per_proc[4] = { 12, 11, 11, 11 };
 
   for (int i=0; i<size; ++i) {
 	  scounts[i] = modes_per_proc[i]*ny*2;
@@ -464,20 +464,23 @@ int main(int narg, char **args) {
 
   TIMER_AA += MPI_Wtime();
 
-  int stride_nx=0; int stride_nz = 0;
-      if (rank == 1) {
-      for (int i = 0; i < scounts[rank]; i++) {
+  if (rank == 3) {
+	  int total_modes = displs[rank]/ (ny*2);
+	  int stride_nz = total_modes / nx;
+	  int stride_nx = total_modes - stride_nz * nx;
+
+	  for (int i = 0; i < scounts[rank]; i++) {
     	  if ( i % (ny*2) == 0) {
-    		  printf("========(nx= %d, nz= %d)=======\n", stride_nx, stride_nz);
+    		  printf("========(nx= %d, nz= %d)=======\n", stride_nx , stride_nz);
     		  stride_nx ++;
-    		  if ( stride_nx % nx == 0) {
+    		  if ( (stride_nx ) % nx == 0) {
     			  stride_nx =0;
     			  stride_nz ++;
     		  }
     	  }
-    	 printf("u[%d]= %g\n", (i+rank*nx*ny*nz), u[i]);
+    	 printf("u[%d]= %g\n", (i), u[i]);
       }
-      }
+  }
 
 
  /* int stride_ny=0; int stride_nz = 0;
