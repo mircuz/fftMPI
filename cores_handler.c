@@ -25,18 +25,22 @@ void cores_handler( int modes, int size, int elem_per_proc[size]) {
 
 		if (rank == size ) rank =0;
 	}
+	
 	for (int i = 0; i < size; i++){
 	printf("%d modes on rank %d\n", elem_per_proc[i], i);
 	check = check+elem_per_proc[i];
 	}
-	printf("check - modes = %g ", check - modes);
+	if ( (int)(check - modes) != 0 ) {
+			printf("[ERROR] check - modes = %d!!\nUnable to scatter modes properly\nAbort... \n", check - modes);
+	}
+
 
 }
 
 int main(void) {
-	int nx = 512;
+	int nx = 4;
 	int modes = (nx+1)*(nx*2+1);
-	int processors = 10000;
+	int processors = 2;
 	int elem_per_proc[processors];
 	printf("MODES: %d\n", modes);
 

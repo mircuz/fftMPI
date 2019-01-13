@@ -429,23 +429,19 @@ int main(int narg, char **args) {
   int* displs = (int *)malloc(size*sizeof(int));
   int* scounts = (int *)malloc(size*sizeof(int));
   int* receive = (int *)malloc(size*sizeof(int));
-  int factored_modes; float mantissa;
-  factored_modes = (nx*nz) /size;
-  mantissa = nx*nz - factored_modes*nx*nz;
-  printf("factor %d, mantissa %d", factored_modes, mantissa);
+
+  int modes_per_proc[2] = { 23, 22 };
 
   for (int i=0; i<size; ++i) {
-              displs[i] = i*factored_modes*ny*2;	// *2 to handle complex numbers
-              scounts[i] = factored_modes*ny*2;
-              if (i == 1) {
-            	  scounts[i] = 12*ny*2;
-              }
-              receive[i] = scounts[i];
+	  scounts[i] = modes_per_proc[i]*ny*2;
+	  receive[i] = scounts[i];
+	  displs[i] = displs[i-1] + modes_per_proc[i-1] *ny*2;	// *2 to handle complex numbers
+	  if (i == 0 ) displs[0] = 0;
   }
 
   if (rank == 0) {
 	  for (int i = 0; i< size; i++){
-	  printf("[RANK %d]\tsend_counts: %d, displacement: %d\n",rank,scounts[i], displs[i]);
+	  printf("[RANK %d]\tsend_counts: %d, displacement: %d\n",rank, scounts[i], displs[i]);
 	  }
   }
 
@@ -469,7 +465,7 @@ int main(int narg, char **args) {
   TIMER_AA += MPI_Wtime();
 
   int stride_nx=0; int stride_nz = 0;
-      if (rank == 3) {
+      if (rank == 1) {
       for (int i = 0; i < scounts[rank]; i++) {
     	  if ( i % (ny*2) == 0) {
     		  printf("========(nx= %d, nz= %d)=======\n", stride_nx, stride_nz);
@@ -597,7 +593,7 @@ int main(int narg, char **args) {
 	  printf("%lgs employed to perform 2D FFT (forward) \n", TIMER_f1 +TIMER_f2);
   	  printf("%lgs employed to transpose the array (x-pencil) \n", TIMER_TRASP_x);
   	  printf("%lgs employed to perform convolutions \n", TIMER_conv);
-  	  printf("%lgs employed to gather, cut modes & scatter data \n", TIMER_AA);
+  	  printf("%lgs employed to gather, cut modes, transpose & scatter data \n", TIMER_AA);
   	 // printf("%lgs employed to transpose the array (y-pencil) \n", TIMER_TRASP_y);
   	  printf("-----------------------------------------------------------\n\n");
 /*  	  // Disk files
