@@ -13,7 +13,7 @@
 #include "fft_support.h"
 
 
-#define MODES 62;
+#define MODES 4;
 
 int main(int narg, char **args) {
 
@@ -52,12 +52,6 @@ int main(int narg, char **args) {
 
   // Algorithm to factor Nprocs into roughly cube roots
   int npfast,npmid,npslow;
-  /*npfast = (int) pow(size,1.0/3.0);
-  while (npfast < size) {
-    if (size % npfast == 0) break;
-    npfast++;
-  }
-  */
   npfast= 1;
   int npmidslow = size / npfast;
   npmid = (int) sqrt(npmidslow);
@@ -116,12 +110,33 @@ int main(int narg, char **args) {
   permute = 2;  		// From x-contiguous to z-contiguous arrays
   memoryflag = 1;		// Self-allocate the buffers
 
-  printf("HERE");
+
   /******************************************* Size Variables ******************************************/
   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
-  int elem_per_proc = (nxd*ny*nzd)*2 /size;
+  int elem_per_proc = insize*2;
+
+  // Alloc the arrays
+  int* displs = (int *)malloc(size*sizeof(int));
+  int* scounts = (int *)malloc(size*sizeof(int));
+  int* receive = (int *)malloc(size*sizeof(int));
+
+  // Setup matrix
+  int modes_per_proc[size];
+  modes_per_proc[rank] = (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
+  MPI_Allgather(&modes_per_proc[rank],1,MPI_INT,modes_per_proc,1,MPI_INT, MPI_COMM_WORLD);
+  // Scattering parameters
+  int offset=0;
+  for (int i=0; i<size; ++i) {
+  	  scounts[i] = modes_per_proc[i]*nxd*2;
+  	  receive[i] = scounts[i];
+  	  displs[i] = offset ;
+  	  offset += scounts[i];
+  }
+
+  printf("modes_ proc %d on rank %d\n", modes_per_proc[rank], rank);
+  printf("scoutn %d & disps %d on rank %d\n", scounts[rank], displs[rank], rank);
 
 
   /******************************************** Memory Alloc *******************************************/
@@ -139,11 +154,11 @@ int main(int narg, char **args) {
 
 
   // Declare variables, on all procs, needed to Scatter data
-    FFT_SCALAR *V, *U, *W;
+  FFT_SCALAR *V, *U, *W;
 
-    if (rank == 0) {
-  	  // Allocate the arrays
-  	  FFT_SCALAR  *U_read, *V_read, *W_read;
+  if (rank == 0) {
+	  // Allocate the arrays
+	  FFT_SCALAR  *U_read, *V_read, *W_read;
   	  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
   	  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
   	  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
@@ -159,7 +174,7 @@ int main(int narg, char **args) {
   		  //printf("I've read %lf\n", U_read[i]);
   	  }
 
-  	  // Allocate mememory needed to Scatter data only on the broadcaster
+  	  // Allocate mememory needed to Scatter data, only on the broadcaster
   	  U = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
   	  V = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
   	  W = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
@@ -193,14 +208,15 @@ int main(int narg, char **args) {
   		  W[i] = 0;
   	  }
   	  free(U_read);		free(V_read);		free(W_read);
-    }
+  }
 
   //Send chunks of array Velocity to all processors
-  MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Scatter( V, elem_per_proc , MPI_DOUBLE, v, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  MPI_Scatter( W, elem_per_proc , MPI_DOUBLE, w, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Scatterv(U, scounts, displs, MPI_DOUBLE, u, receive[rank] , MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Scatterv(V, scounts, displs, MPI_DOUBLE, v, receive[rank] , MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Scatterv(W, scounts, displs, MPI_DOUBLE, w, receive[rank] , MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
 
   //print_array( u, insize, i_length, rank, "Initialized Values");
 
@@ -323,7 +339,7 @@ int main(int narg, char **args) {
   // Finalize plan
   remap3d_destroy(remap_xpencil);
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  //print_array( u, insize, i_length, rank, "Results UU");
+  //print_array( u, insize, i_length, rank, "Results U");
 
 
   /*********************************************** Modes cutting ********************************************/
@@ -379,29 +395,24 @@ int main(int narg, char **args) {
 
 
   /********************************** Setup asymetric factors for scattering **********************************/
-  // Alloc the arrays
-  int* displs = (int *)malloc(size*sizeof(int));
-  int* scounts = (int *)malloc(size*sizeof(int));
-  int* receive = (int *)malloc(size*sizeof(int));
-
   // Setup matrix
-  int modes_per_proc[size];
+   modes_per_proc[size];
   for (int i = 0; i < size; i++){
 	  modes_per_proc[i] = 0;
+	  displs[i] = 0;
   }
-
-
   // Set modes per processor
   cores_handler( nx*nz, size, modes_per_proc);
-
   // Scattering parameters
-  int offset=0;
+  offset=0;
   for (int i=0; i<size; ++i) {
 	  scounts[i] = modes_per_proc[i]*ny*2;
 	  receive[i] = scounts[i];
 	  displs[i] = offset ;
 	  offset += modes_per_proc[i] *ny*2;
   }
+
+
 
 
   /************************************************ Data scattering ***********************************************/

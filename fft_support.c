@@ -259,7 +259,7 @@ void cores_handler( int modes, int size, int modes_per_proc[size]) {
 	}
 	
 	for (int i = 0; i < size; i++){
-		printf("%d modes on rank %d\n", modes_per_proc[i], i);
+		//printf("%d modes on rank %d\n", modes_per_proc[i], i);
 		check = check+modes_per_proc[i];
 	}
 	if ( (int)(check - modes) != 0 ) {
