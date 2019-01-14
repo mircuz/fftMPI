@@ -259,12 +259,33 @@ void cores_handler( int modes, int size, int modes_per_proc[size]) {
 	}
 	
 	for (int i = 0; i < size; i++){
-	//printf("%d modes on rank %d\n", modes_per_proc[i], i);
-	check = check+modes_per_proc[i];
+		printf("%d modes on rank %d\n", modes_per_proc[i], i);
+		check = check+modes_per_proc[i];
 	}
 	if ( (int)(check - modes) != 0 ) {
 			printf("[ERROR] check - modes = %d!!\nUnable to scatter modes properly\nAbort... \n", check - modes);
 	}
 
 
+}
+
+void print_y_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
+		int displs, int scounts, int desidered_rank) {
+if (rank == desidered_rank) {
+	  int total_modes = displs/ (ny*2);
+	  int stride_nz = total_modes / nx;
+	  int stride_nx = total_modes - stride_nz * nx;
+
+	  for (int i = 0; i < scounts; i++) {
+   	  if ( i % (ny*2) == 0) {
+   		  printf("========(nx= %d, nz= %d)=======\n", stride_nx , stride_nz);
+   		  stride_nx ++;
+   		  if ( (stride_nx ) % nx == 0) {
+   			  stride_nx =0;
+   			  stride_nz ++;
+   		  }
+   	  }
+   	 printf("u[%d]= %g\n", (i), u[i]);
+     }
+ }
 }

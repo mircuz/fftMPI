@@ -13,7 +13,7 @@
 #include "fft_support.h"
 
 
-#define MODES 4;
+#define MODES 62;
 
 int main(int narg, char **args) {
 
@@ -110,21 +110,19 @@ int main(int narg, char **args) {
 		  "On rank %d the coordinates are: "
 		  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, out_ilo, out_jlo, out_klo, out_ihi, out_jhi, out_khi );
 
-
-
-
   void *remap_zpencil, *remap_xpencil, *remap_ypencil;
   int nqty, permute, memoryflag, sendsize, recvsize;
   nqty = 2;			// Use couples of real numbers per grid point
   permute = 2;  		// From x-contiguous to z-contiguous arrays
   memoryflag = 1;		// Self-allocate the buffers
 
-
+  printf("HERE");
   /******************************************* Size Variables ******************************************/
   int insize = (in_ihi-in_ilo+1) * (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   int outsize = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) * (out_khi-out_klo+1);
   int remapsize = (insize > outsize) ? insize : outsize;
   int elem_per_proc = (nxd*ny*nzd)*2 /size;
+
 
   /******************************************** Memory Alloc *******************************************/
   FFT_SCALAR *u = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
@@ -140,63 +138,63 @@ int main(int narg, char **args) {
   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
 
-  /********************************************* Memory filling ********************************************/
   // Declare variables, on all procs, needed to Scatter data
-  FFT_SCALAR *V, *U, *W;
+    FFT_SCALAR *V, *U, *W;
 
-  if (rank == 0) {
-	  // Allocate the arrays
-	  FFT_SCALAR  *U_read, *V_read, *W_read;
-	  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
-	  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
-	  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+    if (rank == 0) {
+  	  // Allocate the arrays
+  	  FFT_SCALAR  *U_read, *V_read, *W_read;
+  	  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+  	  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+  	  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
 
-	  //On rank 0 read the dataset
-	  FILE *U_dat;	U_dat = fopen( "u.dat", "r");
-	  FILE *V_dat;	V_dat = fopen( "v.dat", "r");
-	  FILE *W_dat;	W_dat = fopen( "w.dat", "r");
-	  for ( int i = 0; i < (nx)*(ny)*(nz)*2; i++) {
-		  fscanf( U_dat, "%lf", &U_read[i]);
-		  fscanf( V_dat, "%lf", &V_read[i]);
-		  fscanf( W_dat, "%lf", &W_read[i]);
-		  //printf("I've read %lf\n", U_read[i]);
-	  }
+  	  //On rank 0 read the dataset
+  	  FILE *U_dat;	U_dat = fopen( "u.dat", "r");
+  	  FILE *V_dat;	V_dat = fopen( "v.dat", "r");
+  	  FILE *W_dat;	W_dat = fopen( "w.dat", "r");
+  	  for ( int i = 0; i < (nx)*(ny)*(nz)*2; i++) {
+  		  fscanf( U_dat, "%lf", &U_read[i]);
+  		  fscanf( V_dat, "%lf", &V_read[i]);
+  		  fscanf( W_dat, "%lf", &W_read[i]);
+  		  //printf("I've read %lf\n", U_read[i]);
+  	  }
 
-	  // Allocate mememory needed to Scatter data only on the broadcaster
-	  U = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
-	  V = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
-	  W = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+  	  // Allocate mememory needed to Scatter data only on the broadcaster
+  	  U = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+  	  V = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
+  	  W = (FFT_SCALAR*) malloc( nxd*ny*nzd*2* sizeof(FFT_SCALAR));
 
-	  //Fill the array with read values and zeros for AA
-	  int i, stride_y, stride_z, reader=0, last_index;
-	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
-		  //printf("\n\nstride z %d\n", stride_z );
-	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
-	  		//printf("\nstride y %d\n", stride_y );
-			  for ( i = 0; i < (nx)*2; i++) {
-	  			  U[stride_z + stride_y+i] = U_read[reader];
-	  			  V[stride_z + stride_y+i] = V_read[reader];
-	  			  W[stride_z + stride_y+i] = W_read[reader];
-	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
-	  			  reader++;
-	  		  }
-	  		  for ( i = (nx)*2; i < nxd*2; i++) {
-	  			  U[stride_z + stride_y+i] = 0;
-	  			  V[stride_z + stride_y+i] = 0;
-	  			  W[stride_z + stride_y+i] = 0;
-	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
-	  		  }
-	  	  }
-	  	  last_index = stride_z + stride_y;
-	  }
-	  //Fill with zeros from nz to nzd
-	  for ( int i = last_index; i < nzd*nxd*ny*2; i++) {
-		  U[i] = 0;
-		  V[i] = 0;
-		  W[i] = 0;
-	  }
-	  free(U_read);		free(V_read);		free(W_read);
-  }
+  	  //Fill the array with read values and zeros for AA
+  	  int i, stride_y, stride_z, reader=0, last_index;
+  	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+  		  //printf("\n\nstride z %d\n", stride_z );
+  	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+  	  		//printf("\nstride y %d\n", stride_y );
+  			  for ( i = 0; i < (nx)*2; i++) {
+  	  			  U[stride_z + stride_y+i] = U_read[reader];
+  	  			  V[stride_z + stride_y+i] = V_read[reader];
+  	  			  W[stride_z + stride_y+i] = W_read[reader];
+  	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+  	  			  reader++;
+  	  		  }
+  	  		  for ( i = (nx)*2; i < nxd*2; i++) {
+  	  			  U[stride_z + stride_y+i] = 0;
+  	  			  V[stride_z + stride_y+i] = 0;
+  	  			  W[stride_z + stride_y+i] = 0;
+  	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+  	  		  }
+  	  	  }
+  	  	  last_index = stride_z + stride_y;
+  	  }
+  	  //Fill with zeros from nz to nzd
+  	  for ( int i = last_index; i < nzd*nxd*ny*2; i++) {
+  		  U[i] = 0;
+  		  V[i] = 0;
+  		  W[i] = 0;
+  	  }
+  	  free(U_read);		free(V_read);		free(W_read);
+    }
+
   //Send chunks of array Velocity to all processors
   MPI_Scatter( U, elem_per_proc , MPI_DOUBLE, u, elem_per_proc,  MPI_DOUBLE, 0, MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -215,7 +213,6 @@ int main(int narg, char **args) {
 				  out_ilo,  out_ihi,  out_jlo, out_jhi,  out_klo,  out_khi,
       			  nqty, permute, memoryflag, &sendsize, &recvsize);
   // -----------------------------------------------------------------------------------------------------------
-
   // Backward FFT#1
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   double timer_b1 = 0.0;
@@ -382,6 +379,7 @@ int main(int narg, char **args) {
 
 
   /********************************** Setup asymetric factors for scattering **********************************/
+  // Alloc the arrays
   int* displs = (int *)malloc(size*sizeof(int));
   int* scounts = (int *)malloc(size*sizeof(int));
   int* receive = (int *)malloc(size*sizeof(int));
@@ -392,23 +390,21 @@ int main(int narg, char **args) {
 	  modes_per_proc[i] = 0;
   }
 
+
+  // Set modes per processor
   cores_handler( nx*nz, size, modes_per_proc);
 
-
+  // Scattering parameters
+  int offset=0;
   for (int i=0; i<size; ++i) {
 	  scounts[i] = modes_per_proc[i]*ny*2;
 	  receive[i] = scounts[i];
-	  displs[i] = displs[i-1] + modes_per_proc[i-1] *ny*2;	// *2 to handle complex numbers
-	  if (i == 0 ) displs[0] = 0;
+	  displs[i] = offset ;
+	  offset += modes_per_proc[i] *ny*2;
   }
 
-  if (rank == 0) {
-	  for (int i = 0; i< size; i++){
-	  printf("[RANK %d]\tsend_counts: %d, displacement: %d\n",rank, scounts[i], displs[i]);
-	  }
-  }
 
-  // Data scattering
+  /************************************************ Data scattering ***********************************************/
   MPI_Scatterv(U, scounts, displs, MPI_DOUBLE, u, receive[rank] , MPI_DOUBLE, 0, MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -427,40 +423,7 @@ int main(int narg, char **args) {
 
   TIMER_AA += MPI_Wtime();
 
-  if (rank == 3) {
-	  int total_modes = displs[rank]/ (ny*2);
-	  int stride_nz = total_modes / nx;
-	  int stride_nx = total_modes - stride_nz * nx;
-
-	  for (int i = 0; i < scounts[rank]; i++) {
-    	  if ( i % (ny*2) == 0) {
-    		  printf("========(nx= %d, nz= %d)=======\n", stride_nx , stride_nz);
-    		  stride_nx ++;
-    		  if ( (stride_nx ) % nx == 0) {
-    			  stride_nx =0;
-    			  stride_nz ++;
-    		  }
-    	  }
-    	 printf("u[%d]= %g\n", (i), u[i]);
-      }
-  }
-
-
- /* int stride_ny=0; int stride_nz = 0;
-  if (rank == 0) {
-  for (int i = 0; i < elem_per_proc; i++) {
-	  if ( i % (nx*2) == 0) {
-		  printf("========(ny= %d, nz= %d)=======\n", stride_ny, stride_nz);
-		  stride_ny ++;
-		  if ( stride_ny % ny == 0) {
-			  stride_ny =0;
-			  stride_nz ++;
-		  }
-	  }
-	 printf("u[%d]= %g\n", (i+rank*nx*ny*nz), u[i]);
-  }
-  }
-*/
+  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 3);
 
   /************************************************ y-Transpose *********************************************/
 /*  // IN
