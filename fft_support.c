@@ -211,41 +211,39 @@ int i, stride_y, stride_z, reader=0, last_index;
 }
 
 void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
-
 	struct cmplx {
 		double re, im;
 	};
 
-	int reader = 0;
+	int reader = 0, writer = 0;
 	// Fill the array on rank 0
-	cmplx u_mat[nx][ny][nz];
+	cmplx u_mat[nx][ny];
 	for (int k = 0; k < nz; k++) {
+
+		// Read the k-th plane
 		for (int j = 0; j < ny; j++) {
 			for (int i = 0; i < nx; i++) {
-				u_mat[i][j][k].re = U[reader];
+				//printf("U[%d] = %g\n", reader, U[reader]);
+				u_mat[i][j].re = U[reader];
 				reader++;
-				u_mat[i][j][k].im = U[reader];
+				//printf("U[%d] = %g\n", reader, U[reader]);
+				u_mat[i][j].im = U[reader];
 				reader++;
 			}
 		}
-	}
-
-	// Transpose the array & prepare for scattering
-  reader=0;
-  for (int k = 0; k < nz; k++) {
+		// Transpose the k-th plane
 	  for (int i = 0; i < nx; i++) {
 		  for (int j = 0; j < ny; j++) {
-			  U[reader] = u_mat[i][j][k].re;
-			  //printf("U[%d] = %g\n", reader, U[reader]);
-			  reader++;
-			  U[reader] = u_mat[i][j][k].im;
-			  //printf("U[%d] = %g\n", reader, U[reader]);
-			  //printf("u_mat[%d][%d][%d].re = %g\n", i,j,k, u_mat[i][j][k].re);
-			  //printf("u_mat[%d][%d][%d].im = %g\n", i,j,k, u_mat[i][j][k].im);
-			  reader++;
+			  U[writer] = u_mat[i][j].re;
+			  //printf("U[%d] = %g\n", writer, U[writer]);
+			  writer++;
+			  U[writer] = u_mat[i][j].im;
+			  //printf("U[%d] = %g\n", writer, U[writer]);
+			  writer++;
   		  }
   	  }
-  }
+	}
+
 }
 
 void cores_handler( int modes, int size, int modes_per_proc[size]) {
@@ -288,4 +286,54 @@ if (rank == desidered_rank) {
    	 printf("u[%d]= %g\n", (i), u[i]);
      }
  }
+}
+
+void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W) {
+
+	// Allocate the arrays
+		  FFT_SCALAR  *U_read, *V_read, *W_read;
+	  	  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+	  	  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+	  	  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+
+	  	  //On rank 0 read the dataset
+	  	  FILE *U_dat;	U_dat = fopen( "u.dat", "r");
+	  	  FILE *V_dat;	V_dat = fopen( "v.dat", "r");
+	  	  FILE *W_dat;	W_dat = fopen( "w.dat", "r");
+	  	  for ( int i = 0; i < (nx)*(ny)*(nz)*2; i++) {
+	  		  fscanf( U_dat, "%lf", &U_read[i]);
+	  		  fscanf( V_dat, "%lf", &V_read[i]);
+	  		  fscanf( W_dat, "%lf", &W_read[i]);
+	  		  //printf("I've read %lf\n", U_read[i]);
+	  	  }
+
+	  	  //Fill the array with read values and zeros for AA
+	  	  int i, stride_y, stride_z, reader=0, last_index;
+	  	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+	  		  //printf("\n\nstride z %d\n", stride_z );
+	  	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+	  	  		//printf("\nstride y %d\n", stride_y );
+	  			  for ( i = 0; i < (nx)*2; i++) {
+	  	  			  U[stride_z + stride_y+i] = U_read[reader];
+	  	  			  V[stride_z + stride_y+i] = V_read[reader];
+	  	  			  W[stride_z + stride_y+i] = W_read[reader];
+	  	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+	  	  			  reader++;
+	  	  		  }
+	  	  		  for ( i = (nx)*2; i < nxd*2; i++) {
+	  	  			  U[stride_z + stride_y+i] = 0;
+	  	  			  V[stride_z + stride_y+i] = 0;
+	  	  			  W[stride_z + stride_y+i] = 0;
+	  	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+	  	  		  }
+	  	  	  }
+	  	  	  last_index = stride_z + stride_y;
+	  	  }
+	  	  //Fill with zeros from nz to nzd
+	  	  for ( int i = last_index; i < nzd*nxd*ny*2; i++) {
+	  		  U[i] = 0;
+	  		  V[i] = 0;
+	  		  W[i] = 0;
+	  	  }
+	  	  free(U_read);		free(V_read);		free(W_read);
 }
