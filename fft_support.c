@@ -193,21 +193,44 @@ void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int
 
 }
 
-void dealiasing(int nx, int ny, int nz, int nxd, FFT_SCALAR *U) {
-int i, stride_y, stride_z, reader=0, last_index;
-	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
-   		  //printf("\n\nstride z %d\n", stride_z );
-   	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
-   	  		//printf("\nstride y %d\n", stride_y );
-   			  for ( i = 0; i < (nx)*2; i++) {
+void dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 
-   	  			  U[reader] = U[stride_z + stride_y+i];
-   	  			  //printf("U[%d] =  %g\n", (reader), U[reader]);
-   	  			  reader++;
-   	  		  }
-   	  	  }
-   	  	  last_index = stride_z + stride_y;
-	  }
+
+	int nz_left = 1+ (nz-1)/2 ;
+
+	int i, stride_y, stride_z, reader=0, last_index;
+	for ( stride_z = 0; stride_z < nz_left*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+		//printf("\n\nstride z %d\n", stride_z );
+		for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+			//printf("\nstride y %d\n", stride_y );
+			for ( i = 0; i < (nx)*2; i++) {
+
+				U[reader] = U[stride_z + stride_y+i];
+				//printf("U[%d] =  %g\n", (reader), U[reader]);
+				reader++;
+			}
+		}
+		last_index = stride_z + stride_y;
+	}
+
+
+
+
+
+	for ( stride_z = (nzd - nz_left+1)*nxd*ny*2; stride_z < nzd*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+	     		  //printf("\n\nstride z %d\n", stride_z );
+	     	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+	     	  		//printf("\nstride y %d\n", stride_y );
+	     			  for ( i = 0; i < (nx)*2; i++) {
+
+	     	  			  U[reader] = U[stride_z + stride_y+i];
+	     	  			  //printf("U[%d] =  %g\n", (reader), U[reader]);
+	     	  			  reader++;
+	     	  		  }
+	     	  	  }
+	     	  	  last_index = stride_z + stride_y;
+	  	  }
+
 }
 
 void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
@@ -283,7 +306,7 @@ if (rank == desidered_rank) {
    			  stride_nz ++;
    		  }
    	  }
-   	 printf("u[%d]= %g\n", (i), u[i]);
+   	 printf("u[%d]= %f\n", (i), u[i]);
      }
  }
 }
@@ -307,9 +330,10 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  		  //printf("I've read %lf\n", U_read[i]);
 	  	  }
 
+	  	  int nz_left = 1+ (nz-1)/2 ;
 	  	  //Fill the array with read values and zeros for AA
 	  	  int i, stride_y, stride_z, reader=0, last_index;
-	  	  for ( stride_z = 0; stride_z < nz*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+	  	  for ( stride_z = 0; stride_z < nz_left*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
 	  		  //printf("\n\nstride z %d\n", stride_z );
 	  	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
 	  	  		//printf("\nstride y %d\n", stride_y );
@@ -324,16 +348,43 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  	  			  U[stride_z + stride_y+i] = 0;
 	  	  			  V[stride_z + stride_y+i] = 0;
 	  	  			  W[stride_z + stride_y+i] = 0;
-	  	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+	  	  			 // printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
 	  	  		  }
 	  	  	  }
 	  	  	  last_index = stride_z + stride_y;
+	  	  	  //printf("last %d\n", (nzd - nz_left+1)*nxd*ny*2);
 	  	  }
 	  	  //Fill with zeros from nz to nzd
-	  	  for ( int i = last_index; i < nzd*nxd*ny*2; i++) {
+	  	  for ( int i = last_index; i < (nzd - nz_left+1)*nxd*ny*2; i++) {
 	  		  U[i] = 0;
 	  		  V[i] = 0;
 	  		  W[i] = 0;
 	  	  }
+
+	  	  for ( stride_z = (nzd - nz_left+1)*nxd*ny*2; stride_z < nzd*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
+	  		  //printf("\n\nstride z %d\n", stride_z );
+	  		  for ( stride_y = 0 ; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+	  			  //printf("\nstride y %d\n", stride_y );
+	  			  for ( i = 0; i < (nx)*2; i++) {
+	  				  U[stride_z + stride_y+i] = U_read[reader];
+	  				  V[stride_z + stride_y+i] = V_read[reader];
+	  				  W[stride_z + stride_y+i] = W_read[reader];
+	  				  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+	  				  reader++;
+	  			  }
+	  			  for ( i = (nx)*2; i < nxd*2; i++) {
+	  				  U[stride_z + stride_y+i] = 0;
+	  				  V[stride_z + stride_y+i] = 0;
+	  				  W[stride_z + stride_y+i] = 0;
+	  				  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
+	  			  }
+	  		  }
+	  		  last_index = stride_z + stride_y;
+	  		  //printf("last %d\n", last_index);
+	  	  }
 	  	  free(U_read);		free(V_read);		free(W_read);
+	  	/*  for (int i =0; i < nxd*nzd*ny*2; i++) {
+	  		  printf("u[%d] = %g\n", i, U[i]);
+	  	  } */
 }
+
