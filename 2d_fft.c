@@ -152,7 +152,7 @@ int main(int narg, char **args) {
   FFT_SCALAR *sendbuf = (FFT_SCALAR *) malloc(sendsize*sizeof(FFT_SCALAR)*2);
   FFT_SCALAR *recvbuf = (FFT_SCALAR *) malloc(recvsize*sizeof(FFT_SCALAR)*2);
 
-
+  FFT_SCALAR *u_ref = (FFT_SCALAR *) malloc(remapsize*sizeof(FFT_SCALAR)*2);
   // Declare variables, on all procs, needed to Scatter data
   FFT_SCALAR *V, *U, *W;
 
@@ -175,6 +175,7 @@ int main(int narg, char **args) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   //print_array( u, insize, i_length, rank, "Initialized Values");
+  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 0);
 
 
   /************************************************ backward FFTs *********************************************/
@@ -197,7 +198,6 @@ int main(int narg, char **args) {
 
   timer_b1 += MPI_Wtime();
 
-
   // Transpose in z-pencil
   double timer_trasp_z = 0.0, TIMER_TRASP_z = 0.0;
   timer_trasp_z -= MPI_Wtime();
@@ -219,8 +219,8 @@ int main(int narg, char **args) {
 
   //Finalize plan
   remap3d_destroy(remap_zpencil);
+  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 0);
   //print_array( u, insize, k_length, rank, "First Transpose of U performed");
-  //print_array( w, insize, k_length, rank, "First Transpose of W performed");
 
 
   /************************************************ Convolutions *********************************************/
@@ -239,6 +239,7 @@ int main(int narg, char **args) {
   //print_array( uu, insize, k_length, rank, "UU performed");
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
+  //print_y_pencil(nx, ny, nz, uu, rank, displs[rank], scounts[rank], 0);
   if (rank == 0) printf("Completed\nStarting Forward transformations...\n");
 
   /************************************************ forward FFTs *********************************************/
@@ -299,7 +300,6 @@ int main(int narg, char **args) {
   remap3d_destroy(remap_xpencil);
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   //print_array( uu, insize, i_length, rank, "Results U");
-
   if (rank == 0) printf("Completed\nStarting dealiasing operations\n");
 
 
@@ -472,7 +472,6 @@ int main(int narg, char **args) {
   //print_array( u, insize, ny, rank, "y-Transpose of U performed");
 
 */
-
   /************************************************ Print Stats *********************************************/
   // Gather all stats
   double TIMER_b1, TIMER_b2, TIMER_f1, TIMER_f2, TIMER_conv;
@@ -495,7 +494,6 @@ int main(int narg, char **args) {
   	  printf("%lgs employed to transpose the array (x-pencil) \n", TIMER_TRASP_x);
   	  printf("%lgs employed to perform convolutions \n", TIMER_conv);
   	  printf("%lgs employed to gather, cut modes, transpose & scatter data \n", TIMER_AA);
-  	 // printf("%lgs employed to transpose the array (y-pencil) \n", TIMER_TRASP_y);
   	  printf("-----------------------------------------------------------\n\n");
 /*  	  // Disk files
   	  printf("Saving data on disk...\n");
@@ -520,6 +518,3 @@ int main(int narg, char **args) {
   free(sendbuf);
   MPI_Finalize();
 }
-
-
-

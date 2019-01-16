@@ -119,7 +119,6 @@ void b_FFT( double *work, int elem_per_proc, int N_trasf) {
 		// fill IN array
 		for ( int i = 0; i < 2*N_trasf; i++ ){
 			in[i] = work[i+count*2*N_trasf];
-
 		}
 		// Execute FFT & Normalize
 		FFT( in, N_trasf, -1 );
@@ -195,9 +194,7 @@ void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int
 
 void dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 
-
 	int nz_left = 1+ (nz-1)/2 ;
-
 	int i, stride_y, stride_z, reader=0, last_index;
 	for ( stride_z = 0; stride_z < nz_left*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
 		//printf("\n\nstride z %d\n", stride_z );
@@ -213,24 +210,19 @@ void dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 		last_index = stride_z + stride_y;
 	}
 
-
-
-
-
 	for ( stride_z = (nzd - nz_left+1)*nxd*ny*2; stride_z < nzd*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
-	     		  //printf("\n\nstride z %d\n", stride_z );
-	     	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
-	     	  		//printf("\nstride y %d\n", stride_y );
-	     			  for ( i = 0; i < (nx)*2; i++) {
+		//printf("\n\nstride z %d\n", stride_z );
+		for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
+			//printf("\nstride y %d\n", stride_y );
+			for ( i = 0; i < (nx)*2; i++) {
 
-	     	  			  U[reader] = U[stride_z + stride_y+i];
-	     	  			  //printf("U[%d] =  %g\n", (reader), U[reader]);
-	     	  			  reader++;
-	     	  		  }
-	     	  	  }
-	     	  	  last_index = stride_z + stride_y;
-	  	  }
-
+				U[reader] = U[stride_z + stride_y+i];
+				//printf("U[%d] =  %g\n", (reader), U[reader]);
+				reader++;
+			}
+		}
+		last_index = stride_z + stride_y;
+	}
 }
 
 void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
@@ -330,9 +322,11 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  		  //printf("I've read %lf\n", U_read[i]);
 	  	  }
 
-	  	  int nz_left = 1+ (nz-1)/2 ;
+	  	  /* First things first 0..nz modes are read.
+	  	   * Since the U_read start with negative nz modes we must skip the first 2*nx*ny*(nz_left+1) rows */
+	  	  int nz_left = 1+ (nz-1)/2, reader= 2*nx*ny*(nz_left-1) ;
 	  	  //Fill the array with read values and zeros for AA
-	  	  int i, stride_y, stride_z, reader=0, last_index;
+	  	  int i, stride_y, stride_z, last_index;
 	  	  for ( stride_z = 0; stride_z < nz_left*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
 	  		  //printf("\n\nstride z %d\n", stride_z );
 	  	  	  for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
@@ -360,7 +354,7 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  		  V[i] = 0;
 	  		  W[i] = 0;
 	  	  }
-
+	  	  reader= 0;
 	  	  for ( stride_z = (nzd - nz_left+1)*nxd*ny*2; stride_z < nzd*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
 	  		  //printf("\n\nstride z %d\n", stride_z );
 	  		  for ( stride_y = 0 ; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
@@ -383,7 +377,7 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  		  //printf("last %d\n", last_index);
 	  	  }
 	  	  free(U_read);		free(V_read);		free(W_read);
-	  	/*  for (int i =0; i < nxd*nzd*ny*2; i++) {
+	  	 /* for (int i =0; i < nxd*nzd*ny*2; i++) {
 	  		  printf("u[%d] = %g\n", i, U[i]);
 	  	  } */
 }
