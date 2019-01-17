@@ -1,10 +1,10 @@
-# Validation test for a 2D FFT.
+# 2D FFT on a 3D array with pencil decomposition
 
 
 This script does a pencil decomposition and perform a 2D FFT along x and z dimensions
 on a complex dataset, with whatever number of modes and processors.
 
-Finally the array is transpose in order to get y-pencils.
+Finally the array is transposed in order to get y-pencils.
 FFTs & transpositions have timers to show how many time is spent to perform
 such actions.
 Number of modes is selected during the declarations of the variables at top of
