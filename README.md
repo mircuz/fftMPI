@@ -21,7 +21,7 @@ At this point convolutions are performed.
 Then the transpose, for the convolved arrays, is setted up.
 Once again we performe a 1D FFT, followed by transpose and another 1D FFT.
 
-The final y transposition is performed plane-by-plane on the processor 0, since all the data are already available there for the dealiasing operations.
+The final y transposition is performed plane-by-plane on the processor 0, since all the data are already available there due to de-aliasing operations.
 
 The results check function is implemented, but turned off since the
 convolutions take place. To use it, just copy the portions of code following the
@@ -33,4 +33,4 @@ I provide no warranty about the results of the convolutions.
 Feel free to modify everything, I do not give warranty for anything!
 
 
-Author: Mirco Meazzo
+Author: Dr. Mirco Meazzo
