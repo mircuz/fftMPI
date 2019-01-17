@@ -1,6 +1,9 @@
 # 2D FFT on a 3D array with pencil decomposition
 
+## Requirements
+- fftMPI Library by Sandia National Laboratories (Release 1 Oct 2018)
 
+## Description
 This script does a pencil decomposition and perform a 2D FFT along x and z dimensions
 on a complex dataset, with whatever number of modes and processors.
 
