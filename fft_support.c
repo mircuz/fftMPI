@@ -143,7 +143,6 @@ void f_FFT( double *work, int elem_per_proc, int N_trasf) {
 		FFT( in, N_trasf, +1 );
 		for (int i = 0; i < 2*N_trasf; i++) {
 			work[i+count*2*N_trasf] = in[i];
-
 		}
 		count++;
 	}
@@ -232,7 +231,7 @@ void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
 
 	int reader = 0, writer = 0;
 	// Fill the array on rank 0
-	cmplx u_mat[nx][ny];
+	struct cmplx u_mat[nx][ny];
 	for (int k = 0; k < nz; k++) {
 
 		// Read the k-th plane
@@ -298,7 +297,7 @@ if (rank == desidered_rank) {
    			  stride_nz ++;
    		  }
    	  }
-   	 printf("u[%d]= %f\n", (i), u[i]);
+   	 printf("u[%d]= %.10f\n", (i), u[i]);
      }
  }
 }
@@ -382,3 +381,44 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  	  } */
 }
 
+void print_x_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
+		int displs, int scounts, int desidered_rank) {
+if (rank == desidered_rank) {
+	  int total_modes = displs/ (nx*2);
+	  int stride_nz = total_modes / (nz);
+	  int stride_ny = total_modes - stride_nz*ny;
+
+	  for (int i = 0; i < scounts; i++) {
+   	  if ( i % (nx*2) == 0) {
+   		  printf("========(ny= %d, nz= %d)=======\n", stride_ny , stride_nz);
+   		  stride_ny ++;
+   		  if ( (stride_ny ) % ny == 0) {
+   			  stride_ny =0;
+   			  stride_nz ++;
+   		  }
+   	  }
+   	 printf("u[%d]= %.10f\n", (i), u[i]);
+     }
+ }
+}
+
+void print_z_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
+		int displs, int scounts, int desidered_rank) {
+if (rank == desidered_rank) {
+	  int total_modes = displs/ (nz*2);
+	  int stride_nx = total_modes / (nx);
+	  int stride_ny = total_modes - stride_nx*ny;
+
+	  for (int i = 0; i < scounts; i++) {
+   	  if ( i % (nz*2) == 0) {
+   		  printf("========(nx= %d, ny= %d)=======\n", stride_nx , stride_ny);
+   		  stride_nx ++;
+   		  if ( (stride_nx ) % nx == 0) {
+   			  stride_nx =0;
+   			  stride_ny++;
+   		  }
+   	  }
+   	 printf("u[%d]= %.10f\n", (i), u[i]);
+     }
+ }
+}

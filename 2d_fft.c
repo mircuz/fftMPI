@@ -174,12 +174,8 @@ int main(int narg, char **args) {
   MPI_Scatterv(W, scounts, displs, MPI_DOUBLE, w, receive[rank] , MPI_DOUBLE, 0, MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD);
 
-  //print_array( u, insize, i_length, rank, "Initialized Values");
-  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 0);
-
 
   /************************************************ backward FFTs *********************************************/
-
   if (rank == 0) printf("Starting Backward transformations...\n");
   // ------------------------------------------- Setup z-Transpose --------------------------------------------
   remap3d_create( remap_comm , &remap_zpencil);
@@ -195,8 +191,9 @@ int main(int narg, char **args) {
   b_FFT( u, elem_per_proc, i_length );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   b_FFT( v, elem_per_proc, i_length );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   b_FFT( w, elem_per_proc, i_length );	MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-
   timer_b1 += MPI_Wtime();
+  //print_x_pencil(nxd, ny, nzd, u, rank, displs[rank], scounts[rank], 0);
+
 
   // Transpose in z-pencil
   double timer_trasp_z = 0.0, TIMER_TRASP_z = 0.0;
@@ -219,8 +216,7 @@ int main(int narg, char **args) {
 
   //Finalize plan
   remap3d_destroy(remap_zpencil);
-  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 0);
-  //print_array( u, insize, k_length, rank, "First Transpose of U performed");
+  //print_z_pencil(nxd, ny, nzd, u, rank, displs[rank], scounts[rank], 0);
 
 
   /************************************************ Convolutions *********************************************/
@@ -239,7 +235,7 @@ int main(int narg, char **args) {
   //print_array( uu, insize, k_length, rank, "UU performed");
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
-  //print_y_pencil(nx, ny, nz, uu, rank, displs[rank], scounts[rank], 0);
+  //print_z_pencil(nxd, ny, nzd, uu, rank, displs[rank], scounts[rank], 0);
   if (rank == 0) printf("Completed\nStarting Forward transformations...\n");
 
   /************************************************ forward FFTs *********************************************/
@@ -299,7 +295,7 @@ int main(int narg, char **args) {
   // Finalize plan
   remap3d_destroy(remap_xpencil);
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  //print_array( uu, insize, i_length, rank, "Results U");
+  print_x_pencil(nxd, ny, nzd, uu, rank, displs[rank], scounts[rank], 0);
   if (rank == 0) printf("Completed\nStarting dealiasing operations\n");
 
 
