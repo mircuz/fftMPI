@@ -295,7 +295,7 @@ int main(int narg, char **args) {
   // Finalize plan
   remap3d_destroy(remap_xpencil);
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-  print_x_pencil(nxd, ny, nzd, uu, rank, displs[rank], scounts[rank], 0);
+  //print_x_pencil(nxd, ny, nzd, uu, rank, displs[rank], scounts[rank],0);
   if (rank == 0) printf("Completed\nStarting dealiasing operations\n");
 
 
@@ -392,7 +392,7 @@ int main(int narg, char **args) {
 
   TIMER_AA += MPI_Wtime();
 
-  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 0);
+  //print_y_pencil(nx, ny, nz, uu, rank, displs[rank], scounts[rank], 1);
 
   /************************************************ y-Transpose *********************************************/
 /*  // IN

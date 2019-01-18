@@ -225,9 +225,34 @@ void dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 }
 
 void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
+	/* This routine remap the array in such a manner that negative modes appears on the left side
+	 * of the array. Once remap is completed, the array is transposed in y pencil */
 	struct cmplx {
 		double re, im;
 	};
+	double U_temp[2*nx*ny];
+
+	// Save negative modes
+	double U_neg[2*nx*ny*((nz-1)/2)];
+	for( int i = 0; i < 2*nx*ny*((nz-1)/2); i++) {
+		U_neg[i] = U[i+(2*nx*ny*(1+(nz-1)/2))];
+	}
+	// Save Overriden modes
+	for(int i = 2*nx*ny*((nz-1)/2); i < 2*nx*ny*(1+(nz-1)/2); i++) {
+		U_temp[i-2*nx*ny*((nz-1)/2)] = U[i];
+	}
+	// Move positive modes towards right end
+	for(int i = 0; i < 2*nx*ny*((nz-1)/2); i++) {
+		U[i+2*nx*ny*((nz-1)/2)] = U[i];
+	}
+	// Move Overridden modes
+	for(int i = 0; i < 2*nx*ny; i++) {
+		U[i+2*nx*ny*(nz-1)] = U_temp[i];
+	}
+	// Copy negative modes
+	for (int i = 0; i<2*nx*ny*((nz-1)/2); i++ ) {
+		U[i] = U_neg[i];
+	}
 
 	int reader = 0, writer = 0;
 	// Fill the array on rank 0
@@ -246,18 +271,17 @@ void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
 			}
 		}
 		// Transpose the k-th plane
-	  for (int i = 0; i < nx; i++) {
-		  for (int j = 0; j < ny; j++) {
-			  U[writer] = u_mat[i][j].re;
-			  //printf("U[%d] = %g\n", writer, U[writer]);
-			  writer++;
-			  U[writer] = u_mat[i][j].im;
-			  //printf("U[%d] = %g\n", writer, U[writer]);
-			  writer++;
-  		  }
-  	  }
+		for (int i = 0; i < nx; i++) {
+			for (int j = 0; j < ny; j++) {
+				U[writer] = u_mat[i][j].re;
+				//printf("U[%d] = %g\n", writer, U[writer]);
+				writer++;
+				U[writer] = u_mat[i][j].im;
+				//printf("U[%d] = %g\n", writer, U[writer]);
+				writer++;
+			}
+		}
 	}
-
 }
 
 void cores_handler( int modes, int size, int modes_per_proc[size]) {
