@@ -284,7 +284,7 @@ void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
 	}
 }
 
-void cores_handler( int modes, int size, int modes_per_proc[size]) {
+void cores_handler( int modes, int size, int *modes_per_proc) {
 	int rank =0;
 	int check=0;
 

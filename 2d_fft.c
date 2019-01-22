@@ -123,7 +123,7 @@ int main(int narg, char **args) {
   int* receive = (int *)malloc(size*sizeof(int));
 
   // Setup matrix
-  int modes_per_proc[size];
+  int *modes_per_proc = (int *) malloc(sizeof(int)*size);
   modes_per_proc[rank] = (in_jhi-in_jlo+1) * (in_khi-in_klo+1);
   MPI_Allgather(&modes_per_proc[rank],1,MPI_INT,modes_per_proc,1,MPI_INT, MPI_COMM_WORLD);
   // Scattering parameters
@@ -356,7 +356,6 @@ int main(int narg, char **args) {
 
   /********************************** Setup asymetric factors for scattering **********************************/
   // Setup matrix
-   modes_per_proc[size];
   for (int i = 0; i < size; i++){
 	  modes_per_proc[i] = 0;
 	  displs[i] = 0;
@@ -392,7 +391,7 @@ int main(int narg, char **args) {
 
   TIMER_AA += MPI_Wtime();
 
-  //print_y_pencil(nx, ny, nz, uu, rank, displs[rank], scounts[rank], 1);
+  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 0);
 
   /************************************************ y-Transpose *********************************************/
 /*  // IN
