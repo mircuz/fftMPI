@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <cstring>
 
 typedef double FFT_SCALAR;
 
@@ -222,6 +223,13 @@ void dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 		}
 		last_index = stride_z + stride_y;
 	}
+
+
+	FFT_SCALAR *U_pos = (FFT_SCALAR*)malloc(sizeof(*U_pos) * (2*nx*ny*(1+(nz-1)/2)));
+	memmove(U_pos, U, sizeof(FFT_SCALAR)*2*nx*ny*(1+(nz-1)/2));
+	memmove(U, &U[2*nx*ny*(1+(nz-1)/2)], sizeof(FFT_SCALAR)*2*nx*ny*((nz-1)/2));
+	memmove(&U[2*nx*ny*((nz-1)/2)], U_pos, sizeof(FFT_SCALAR)*2*nx*ny*(1+(nz-1)/2));
+	free(U_pos);
 }
 
 void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
@@ -230,9 +238,8 @@ void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
 	struct cmplx {
 		double re, im;
 	};
-	double U_temp[2*nx*ny];
 
-	// Save negative modes
+	/*// Save negative modes
 	double U_neg[2*nx*ny*((nz-1)/2)];
 	for( int i = 0; i < 2*nx*ny*((nz-1)/2); i++) {
 		U_neg[i] = U[i+(2*nx*ny*(1+(nz-1)/2))];
@@ -253,7 +260,7 @@ void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
 	for (int i = 0; i<2*nx*ny*((nz-1)/2); i++ ) {
 		U[i] = U_neg[i];
 	}
-
+*/
 	int reader = 0, writer = 0;
 	// Fill the array on rank 0
 	struct cmplx u_mat[nx][ny];

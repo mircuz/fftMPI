@@ -13,7 +13,7 @@
 #include "fft_support.h"
 
 
-#define MODES 4;
+#define MODES 200;
 
 int main(int narg, char **args) {
 
@@ -391,7 +391,7 @@ int main(int narg, char **args) {
 
   TIMER_AA += MPI_Wtime();
 
-  //print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 0);
+ // print_y_pencil(nx, ny, nz, u, rank, displs[rank], scounts[rank], 6);
 
   /************************************************ y-Transpose *********************************************/
 /*  // IN
@@ -507,7 +507,7 @@ int main(int narg, char **args) {
   /**************************************** Release Mem & Finalize MPI *************************************/
   free(u);	free(v);	free(w);
   free(uu);	free(uv);	free(vv);	free(vw);	free(ww);	free(uw);
-  free(U);	free(V);	free(W);
+ // free(U);	free(V);	free(W);
   free(UU); free(UV);	free(VV);	free(VW);	free(WW);	free(UW);
   free(recvbuf);
   free(sendbuf);
