@@ -230,6 +230,10 @@ void dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 	memmove(U, &U[2*nx*ny*(1+(nz-1)/2)], sizeof(FFT_SCALAR)*2*nx*ny*((nz-1)/2));
 	memmove(&U[2*nx*ny*((nz-1)/2)], U_pos, sizeof(FFT_SCALAR)*2*nx*ny*(1+(nz-1)/2));
 	free(U_pos);
+	/*for(int i = 0; i < 2*nx*ny*nz; i++) {
+		printf("U[%d]= %f\n", i, U[i]);
+	}*/
+
 }
 
 void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
@@ -239,28 +243,6 @@ void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
 		double re, im;
 	};
 
-	/*// Save negative modes
-	double U_neg[2*nx*ny*((nz-1)/2)];
-	for( int i = 0; i < 2*nx*ny*((nz-1)/2); i++) {
-		U_neg[i] = U[i+(2*nx*ny*(1+(nz-1)/2))];
-	}
-	// Save Overriden modes
-	for(int i = 2*nx*ny*((nz-1)/2); i < 2*nx*ny*(1+(nz-1)/2); i++) {
-		U_temp[i-2*nx*ny*((nz-1)/2)] = U[i];
-	}
-	// Move positive modes towards right end
-	for(int i = 0; i < 2*nx*ny*((nz-1)/2); i++) {
-		U[i+2*nx*ny*((nz-1)/2)] = U[i];
-	}
-	// Move Overridden modes
-	for(int i = 0; i < 2*nx*ny; i++) {
-		U[i+2*nx*ny*(nz-1)] = U_temp[i];
-	}
-	// Copy negative modes
-	for (int i = 0; i<2*nx*ny*((nz-1)/2); i++ ) {
-		U[i] = U_neg[i];
-	}
-*/
 	int reader = 0, writer = 0;
 	// Fill the array on rank 0
 	struct cmplx u_mat[nx][ny];
@@ -333,22 +315,20 @@ if (rank == desidered_rank) {
  }
 }
 
-void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W) {
+void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U, char file_to_read[4]) {
 
 	// Allocate the arrays
-		  FFT_SCALAR  *U_read, *V_read, *W_read;
+		  FFT_SCALAR  *U_read;
 	  	  U_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
-	  	  V_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
-	  	  W_read = (FFT_SCALAR*) malloc( nx*ny*nz*2* sizeof(FFT_SCALAR));
+	  	  if( U_read==NULL) {
+	  		  perror(".:Error while allocating memory to read .dat");
+	  		  abort();
+	  	  }
 
 	  	  //On rank 0 read the dataset
-	  	  FILE *U_dat;	U_dat = fopen( "u.dat", "r");
-	  	  FILE *V_dat;	V_dat = fopen( "v.dat", "r");
-	  	  FILE *W_dat;	W_dat = fopen( "w.dat", "r");
+	  	  FILE *U_dat;	U_dat = fopen( file_to_read, "r");
 	  	  for ( int i = 0; i < (nx)*(ny)*(nz)*2; i++) {
 	  		  fscanf( U_dat, "%lf", &U_read[i]);
-	  		  fscanf( V_dat, "%lf", &V_read[i]);
-	  		  fscanf( W_dat, "%lf", &W_read[i]);
 	  		  //printf("I've read %lf\n", U_read[i]);
 	  	  }
 
@@ -363,15 +343,11 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  	  		//printf("\nstride y %d\n", stride_y );
 	  			  for ( i = 0; i < (nx)*2; i++) {
 	  	  			  U[stride_z + stride_y+i] = U_read[reader];
-	  	  			  V[stride_z + stride_y+i] = V_read[reader];
-	  	  			  W[stride_z + stride_y+i] = W_read[reader];
 	  	  			  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
 	  	  			  reader++;
 	  	  		  }
 	  	  		  for ( i = (nx)*2; i < nxd*2; i++) {
 	  	  			  U[stride_z + stride_y+i] = 0;
-	  	  			  V[stride_z + stride_y+i] = 0;
-	  	  			  W[stride_z + stride_y+i] = 0;
 	  	  			 // printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
 	  	  		  }
 	  	  	  }
@@ -381,8 +357,6 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  	  //Fill with zeros from nz to nzd
 	  	  for ( int i = last_index; i < (nzd - nz_left+1)*nxd*ny*2; i++) {
 	  		  U[i] = 0;
-	  		  V[i] = 0;
-	  		  W[i] = 0;
 	  	  }
 	  	  reader= 0;
 	  	  for ( stride_z = (nzd - nz_left+1)*nxd*ny*2; stride_z < nzd*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
@@ -391,22 +365,18 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  			  //printf("\nstride y %d\n", stride_y );
 	  			  for ( i = 0; i < (nx)*2; i++) {
 	  				  U[stride_z + stride_y+i] = U_read[reader];
-	  				  V[stride_z + stride_y+i] = V_read[reader];
-	  				  W[stride_z + stride_y+i] = W_read[reader];
 	  				  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
 	  				  reader++;
 	  			  }
 	  			  for ( i = (nx)*2; i < nxd*2; i++) {
 	  				  U[stride_z + stride_y+i] = 0;
-	  				  V[stride_z + stride_y+i] = 0;
-	  				  W[stride_z + stride_y+i] = 0;
 	  				  //printf("U[%d] =  %g\n", (stride_z + stride_y+i), U[stride_z + stride_y+i]);
 	  			  }
 	  		  }
 	  		  last_index = stride_z + stride_y;
 	  		  //printf("last %d\n", last_index);
 	  	  }
-	  	  free(U_read);		free(V_read);		free(W_read);
+	  	  free(U_read);
 	  	 /* for (int i =0; i < nxd*nzd*ny*2; i++) {
 	  		  printf("u[%d] = %g\n", i, U[i]);
 	  	  } */
