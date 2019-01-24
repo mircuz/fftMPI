@@ -192,48 +192,29 @@ void generate_inputs(FFT_SCALAR *U, FFT_SCALAR *V, FFT_SCALAR *W, int nfast, int
 
 }
 
-void dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
+void x_dealiasing(int scounts, int modes_per_proc, int nx, int nxd, FFT_SCALAR *u) {
+
+	int stride_x, placeholder=0;
+	for (int mode =0; mode < modes_per_proc; mode++) {
+		stride_x = mode*nxd*2;
+		for (int i = 0; i < 2*nx; i++) {
+			u[placeholder] = u[stride_x+i];
+			placeholder++;
+		}
+	}
+}
+
+void z_dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 
 	int nz_left = 1+ (nz-1)/2 ;
-	int i, stride_y, stride_z, reader=0, last_index;
-	for ( stride_z = 0; stride_z < nz_left*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
-		//printf("\n\nstride z %d\n", stride_z );
-		for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
-			//printf("\nstride y %d\n", stride_y );
-			for ( i = 0; i < (nx)*2; i++) {
-
-				U[reader] = U[stride_z + stride_y+i];
-				//printf("U[%d] =  %g\n", (reader), U[reader]);
-				reader++;
-			}
-		}
-		last_index = stride_z + stride_y;
-	}
-
-	for ( stride_z = (nzd - nz_left+1)*nxd*ny*2; stride_z < nzd*ny*nxd*2; stride_z = stride_z + ny*nxd*2) {
-		//printf("\n\nstride z %d\n", stride_z );
-		for ( stride_y = 0; stride_y < ny*nxd*2; stride_y = stride_y + nxd*2) {
-			//printf("\nstride y %d\n", stride_y );
-			for ( i = 0; i < (nx)*2; i++) {
-
-				U[reader] = U[stride_z + stride_y+i];
-				//printf("U[%d] =  %g\n", (reader), U[reader]);
-				reader++;
-			}
-		}
-		last_index = stride_z + stride_y;
-	}
-
-
-	FFT_SCALAR *U_pos = (FFT_SCALAR*)malloc(sizeof(*U_pos) * (2*nx*ny*(1+(nz-1)/2)));
+	FFT_SCALAR *U_pos = (FFT_SCALAR*)malloc(sizeof(*U_pos) * (2*nx*ny*nz_left));
 	memmove(U_pos, U, sizeof(FFT_SCALAR)*2*nx*ny*(1+(nz-1)/2));
-	memmove(U, &U[2*nx*ny*(1+(nz-1)/2)], sizeof(FFT_SCALAR)*2*nx*ny*((nz-1)/2));
-	memmove(&U[2*nx*ny*((nz-1)/2)], U_pos, sizeof(FFT_SCALAR)*2*nx*ny*(1+(nz-1)/2));
+	memmove(U, &U[2*nx*ny*(nzd-nz_left+1)], sizeof(FFT_SCALAR)*2*nx*ny*(nz_left-1));
+	memmove(&U[2*nx*ny*(nz_left-1)], U_pos, sizeof(FFT_SCALAR)*2*nx*ny*nz_left);
 	free(U_pos);
 	/*for(int i = 0; i < 2*nx*ny*nz; i++) {
 		printf("U[%d]= %f\n", i, U[i]);
 	}*/
-
 }
 
 void transpose_on_rank0(int nx, int ny, int nz, FFT_SCALAR *U) {
