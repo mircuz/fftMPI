@@ -4,8 +4,8 @@
 #include <math.h>
 
 
-void printarr(int *data, int nx, int ny, int nz, int rank, int, char *str);
-int *allocarray(int nx, int ny, int nz);
+void printarr(double *data, int nx, int ny, int nz, int rank, int, char *str);
+double *allocarray(int nx, int ny, int nz);
 
 #define MODES 4
 int main(int narg, char **args) {
@@ -103,7 +103,7 @@ int main(int narg, char **args) {
 	  }
 
 	  if (rank == 0) {
-		  int *arr = allocarray(4*2,4,8);
+		  double *arr = allocarray(4*2,4,8);
 		  for(int k=0; k<8; k++) {
 			  for (int j=0; j<4;j++) {
 				  for (int i=0; i<8; i++) {
@@ -114,10 +114,10 @@ int main(int narg, char **args) {
 		  printarr(arr, 8, 4, 8, rank, 0, "Starting array");
 
 		  MPI_Datatype vector[size], contiguous[size];
-		  int bytes_stride = sizeof(int)*2*nxd*ny;
+		  int bytes_stride = sizeof(double)*2*nxd*ny;
 
 		  for (int i = 0; i < size; i++) {
-			  MPI_Type_contiguous(2*nxd*contiguous_y[i], MPI_INT, &contiguous[i]);
+			  MPI_Type_contiguous(2*nxd*contiguous_y[i], MPI_DOUBLE, &contiguous[i]);
 			  MPI_Type_create_hvector(contiguous_z[i], 1, bytes_stride, contiguous[i], &vector[i]);
 			  MPI_Type_commit(&vector[i]);
 		  }
@@ -128,10 +128,10 @@ int main(int narg, char **args) {
 	  }
 
     if (rank == 8) {
-    	int *arr_recv = (int*)malloc(2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1)*sizeof(int));
-    	MPI_Recv(arr_recv, 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1), MPI_INT, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    	double *arr_recv = (double*)malloc(2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1)*sizeof(double));
+    	MPI_Recv(arr_recv, 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1), MPI_DOUBLE, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     	for(int i=0; i < 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1); i ++){
-    		printf("%d: %d\t\t",i, arr_recv[i]);
+    		printf("%d: %.1f\t\t",i, arr_recv[i]);
     	}
     }
 
@@ -139,14 +139,14 @@ int main(int narg, char **args) {
     return 0;
 }
 
-void printarr(int *data, int nx, int ny, int nz, int rank, int desidered_rank, char *str) {
+void printarr(double *data, int nx, int ny, int nz, int rank, int desidered_rank, char *str) {
     if(rank == desidered_rank){
 	printf("-- %s --\n", str);
     for(int k=0; k<nz; k++) {
     	printf("\n\n-----%d------\n",k);
     	for (int j=0; j<ny;j++) {
     		for (int i=0; i<nx; i++) {
-    			printf("%3d\t", data[i+j*nx+k*nx*ny]);
+    			printf("%.1f\t", data[i+j*nx+k*nx*ny]);
     		}
         printf("\n");
     	}
@@ -154,7 +154,7 @@ void printarr(int *data, int nx, int ny, int nz, int rank, int desidered_rank, c
     }
 }
 
-int *allocarray(int nx, int ny, int nz) {
-	int* arr = (int*)malloc(sizeof(int)*nz*nx*ny);
+double *allocarray(int nx, int ny, int nz) {
+	double* arr = (double*)malloc(sizeof(double)*nz*nx*ny);
     return arr;
 }
