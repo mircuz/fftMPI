@@ -95,7 +95,7 @@ int main(int narg, char **args) {
 		  }
 		  printarr(arr, 8, 4, 8, rank, 0, "Starting array");
 
-		  //MPI_Send(&arr[8], 1, vector[1], 1, 10, MPI_COMM_WORLD);
+
 
 	  }
 
@@ -122,7 +122,7 @@ int main(int narg, char **args) {
 	  MPI_Allgather(&contiguous_y[rank],1,MPI_INT,contiguous_y,1,MPI_INT, MPI_COMM_WORLD);
 	  MPI_Allgather(&contiguous_z[rank],1,MPI_INT,contiguous_z,1,MPI_INT, MPI_COMM_WORLD);
 	  MPI_Allgather(&senddispls[rank],1,MPI_INT,senddispls,1,MPI_INT, MPI_COMM_WORLD);
-	  MPI_Allgather(&localdims[rank],1,MPI_INT,senddispls,1,MPI_INT, MPI_COMM_WORLD);
+	  MPI_Allgather(&localdims[rank],1,MPI_INT,localdims,1,MPI_INT, MPI_COMM_WORLD);
 
 	  MPI_Datatype vector[size], contiguous[size];
 	  int bytes_stride = sizeof(double)*2*nxd*ny;
@@ -135,19 +135,17 @@ int main(int narg, char **args) {
 
 	  MPI_Alltoallw(&arr, sendcounts, senddispls, vector, &arr_recv, localdims, recvdispls, recvtype, MPI_COMM_WORLD);
 
-    /*if (rank == 1) {
+	  /*if (rank == 0){
+		  MPI_Send(&arr[ senddispls[3]], 1, vector[3], 3, 10, MPI_COMM_WORLD);
+	  }
+
+	  if (rank == 3) {
     	double *arr_recv = (double*)malloc(2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1)*sizeof(double));
-    	MPI_Recv(arr_recv, 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1), MPI_DOUBLE, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    	MPI_Recv(arr_recv, localdims[rank], MPI_DOUBLE, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     	for(int i=0; i < 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1); i ++){
     		printf("%d: %.1f\t\t",i, arr_recv[i]);
     	}
     }*/
-
-	  if (rank == 0){
-		  for(int i = 0; i < size; i++) {
-			  printf("cont_y %d, rank %d\n", contiguous_z[i], i);
-	  	  }
-	  }
 
 
     MPI_Type_free(vector);
