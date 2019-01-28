@@ -12,8 +12,6 @@ int main(int narg, char **args) {
 
 	// setup MPI
 	  MPI_Init(&narg,&args);
-	  MPI_Comm remap_comm; // @suppress("Type cannot be resolved")
-	  MPI_Comm_dup( MPI_COMM_WORLD, &remap_comm ); // @suppress("Symbol is not resolved")
 	  MPI_Comm world = MPI_COMM_WORLD; // @suppress("Symbol is not resolved") // @suppress("Type cannot be resolved")
 	  int rank,size;
 	  MPI_Comm_size(world,&size);
@@ -33,10 +31,6 @@ int main(int narg, char **args) {
 		  nzd = nzd*2;
 	  }
 
-	  // Length of the array along directions
-	  int i_length = nxd;
-	  int j_length = ny;
-	  int k_length = nzd;
 
 	  // TOTAL Modes
 	  nfast = nxd;
@@ -89,21 +83,9 @@ int main(int narg, char **args) {
 			  "On rank %d the coordinates are: "
 			  "(%d,%d,%d) -> (%d,%d,%d)\n", rank, in_ilo, in_jlo, in_klo, in_ihi, in_jhi, in_khi );
 
-	  int *contiguous_y = (int *) malloc(sizeof(int)*size);
-	  int *contiguous_z = (int *) malloc(sizeof(int)*size);
-	  contiguous_y[rank] = (in_jhi-in_jlo+1);
-	  contiguous_z[rank] = (in_khi-in_klo+1);
-	  MPI_Allgather(&contiguous_y[rank],1,MPI_INT,contiguous_y,1,MPI_INT, MPI_COMM_WORLD);
-	  MPI_Allgather(&contiguous_z[rank],1,MPI_INT,contiguous_z,1,MPI_INT, MPI_COMM_WORLD);
 
-	  if (rank == 0){
-	  for(int i = 0; i < size; i++) {
-		  printf("cont_y %d, rank %d\n", contiguous_z[i], i);
-	  }
-	  }
-
+	  double *arr = allocarray(4*2,4,8);
 	  if (rank == 0) {
-		  double *arr = allocarray(4*2,4,8);
 		  for(int k=0; k<8; k++) {
 			  for (int j=0; j<4;j++) {
 				  for (int i=0; i<8; i++) {
@@ -113,27 +95,62 @@ int main(int narg, char **args) {
 		  }
 		  printarr(arr, 8, 4, 8, rank, 0, "Starting array");
 
-		  MPI_Datatype vector[size], contiguous[size];
-		  int bytes_stride = sizeof(double)*2*nxd*ny;
+		  //MPI_Send(&arr[8], 1, vector[1], 1, 10, MPI_COMM_WORLD);
 
-		  for (int i = 0; i < size; i++) {
-			  MPI_Type_contiguous(2*nxd*contiguous_y[i], MPI_DOUBLE, &contiguous[i]);
-			  MPI_Type_create_hvector(contiguous_z[i], 1, bytes_stride, contiguous[i], &vector[i]);
-			  MPI_Type_commit(&vector[i]);
-		  }
-
-		  MPI_Send(&arr[176], 1, vector[8], 8, 10, MPI_COMM_WORLD);
-
-		  MPI_Type_free(vector);
 	  }
 
-    if (rank == 8) {
+
+
+	  int *contiguous_y = (int *) malloc(sizeof(int)*size);
+	  int *contiguous_z = (int *) malloc(sizeof(int)*size);
+	  int *sendcounts = (int *) malloc(sizeof(int)*size);
+	  int *senddispls = (int *) malloc(sizeof(int)*size);
+	  int *recvdispls = (int *) malloc(sizeof(int)*size);
+	  int *localdims = (int *) malloc(sizeof(int)*size);
+	  MPI_Datatype recvtype[size];
+	  contiguous_y[rank] = (in_jhi-in_jlo+1);
+	  contiguous_z[rank] = (in_khi-in_klo+1);
+	  senddispls[rank] = 2*nxd*in_jlo + 2*nxd*ny*in_klo;
+	  localdims[rank] = 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1);
+	  double *arr_recv = (double*)malloc(2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1)*sizeof(double));
+	  for (int i = 0; i < size; i++){
+		  sendcounts[i] = 0;
+		  recvdispls[i] = 0;
+		  recvtype[i] = MPI_DOUBLE;
+	  }
+	  sendcounts[0] = 1;
+	  MPI_Allgather(&contiguous_y[rank],1,MPI_INT,contiguous_y,1,MPI_INT, MPI_COMM_WORLD);
+	  MPI_Allgather(&contiguous_z[rank],1,MPI_INT,contiguous_z,1,MPI_INT, MPI_COMM_WORLD);
+	  MPI_Allgather(&senddispls[rank],1,MPI_INT,senddispls,1,MPI_INT, MPI_COMM_WORLD);
+	  MPI_Allgather(&localdims[rank],1,MPI_INT,senddispls,1,MPI_INT, MPI_COMM_WORLD);
+
+	  MPI_Datatype vector[size], contiguous[size];
+	  int bytes_stride = sizeof(double)*2*nxd*ny;
+
+	  for (int i = 0; i < size; i++) {
+		  MPI_Type_contiguous(2*nxd*contiguous_y[i], MPI_DOUBLE, &contiguous[i]);
+		  MPI_Type_create_hvector(contiguous_z[i], 1, bytes_stride, contiguous[i], &vector[i]);
+		  MPI_Type_commit(&vector[i]);
+	  }
+
+	  MPI_Alltoallw(&arr, sendcounts, senddispls, vector, &arr_recv, localdims, recvdispls, recvtype, MPI_COMM_WORLD);
+
+    /*if (rank == 1) {
     	double *arr_recv = (double*)malloc(2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1)*sizeof(double));
     	MPI_Recv(arr_recv, 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1), MPI_DOUBLE, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     	for(int i=0; i < 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1); i ++){
     		printf("%d: %.1f\t\t",i, arr_recv[i]);
     	}
-    }
+    }*/
+
+	  if (rank == 0){
+		  for(int i = 0; i < size; i++) {
+			  printf("cont_y %d, rank %d\n", contiguous_z[i], i);
+	  	  }
+	  }
+
+
+    MPI_Type_free(vector);
 
     MPI_Finalize();
     return 0;
