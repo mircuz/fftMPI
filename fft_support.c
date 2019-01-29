@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <cstring>
+#include <mpi.h>
 
 typedef double FFT_SCALAR;
 
@@ -206,6 +207,10 @@ void x_dealiasing(int scounts, int modes_per_proc, int nx, int nxd, FFT_SCALAR *
 
 void z_dealiasing(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U) {
 
+	/*for(int i = 0; i < 2*nx*ny*nz; i++) {
+			printf("U[%d]= %f\n", i, U[i]);
+	}*/
+
 	int nz_left = 1+ (nz-1)/2 ;
 	FFT_SCALAR *U_pos = (FFT_SCALAR*)malloc(sizeof(*U_pos) * (2*nx*ny*nz_left));
 	memmove(U_pos, U, sizeof(FFT_SCALAR)*2*nx*ny*(1+(nz-1)/2));
@@ -363,20 +368,39 @@ void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR
 	  	  } */
 }
 
-void print_x_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
-		int displs, int scounts, int desidered_rank) {
+void print_x_pencil(int nx, int in_jlo, int in_jhi, int in_klo,
+		FFT_SCALAR *u, int rank, int scounts, int desidered_rank) {
 if (rank == desidered_rank) {
-	  int total_modes = displs/ (nx*2);
-	  int stride_nz = total_modes / (nz);
-	  int stride_ny = total_modes - stride_nz*ny;
+	  int stride_nz = in_klo;
+	  int stride_ny = in_jlo;
 
 	  for (int i = 0; i < scounts; i++) {
    	  if ( i % (nx*2) == 0) {
    		  printf("========(ny= %d, nz= %d)=======\n", stride_ny , stride_nz);
-   		  stride_ny ++;
-   		  if ( (stride_ny ) % ny == 0) {
-   			  stride_ny =0;
+   		  if ( (stride_ny ) == in_jhi) {
+   			  stride_ny = in_jlo;
    			  stride_nz ++;
+   		  }
+   		  else stride_ny ++;
+   	  }
+   	  printf("u[%d]= %.10f\n", (i), u[i]);
+	  }
+}
+}
+
+void print_z_pencil(int nz, int in_ilo, int in_ihi, int in_jlo,
+		FFT_SCALAR *u, int rank, int scounts, int desidered_rank) {
+if (rank == desidered_rank) {
+	  int stride_nx = in_ilo;
+	  int stride_ny = in_jlo;
+
+	  for (int i = 0; i < scounts; i++) {
+   	  if ( i % (nz*2) == 0) {
+   		  printf("========(nx= %d, ny= %d)=======\n", stride_nx , stride_ny);
+   		  stride_nx ++;
+   		  if ( (stride_nx) == in_ihi) {
+   			  stride_nx = in_ilo;
+   			  stride_ny++;
    		  }
    	  }
    	 printf("u[%d]= %.10f\n", (i), u[i]);
@@ -384,23 +408,54 @@ if (rank == desidered_rank) {
  }
 }
 
-void print_z_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
-		int displs, int scounts, int desidered_rank) {
-if (rank == desidered_rank) {
-	  int total_modes = displs/ (nz*2);
-	  int stride_nx = total_modes / (nx);
-	  int stride_ny = total_modes - stride_nx*ny;
+void data_scattering(int rank, int size, int in_jlo, int in_jhi, int in_klo,
+					 int in_khi, int nxd, int ny, int nzd, FFT_SCALAR *arr, FFT_SCALAR *arr_recv){
 
-	  for (int i = 0; i < scounts; i++) {
-   	  if ( i % (nz*2) == 0) {
-   		  printf("========(nx= %d, ny= %d)=======\n", stride_nx , stride_ny);
-   		  stride_nx ++;
-   		  if ( (stride_nx ) % nx == 0) {
-   			  stride_nx =0;
-   			  stride_ny++;
-   		  }
-   	  }
-   	 printf("u[%d]= %.10f\n", (i), u[i]);
-     }
- }
+	  int *contiguous_y = (int *) malloc(sizeof(int)*size);
+	  int *contiguous_z = (int *) malloc(sizeof(int)*size);
+	  int *sendcounts = (int *) malloc(sizeof(int)*size);
+	  int *senddispls = (int *) malloc(sizeof(int)*size);
+	  int *recvdispls = (int *) malloc(sizeof(int)*size);
+	  int *recvcounts = (int *) malloc(sizeof(int)*size);
+	  if (( contiguous_z||contiguous_y||senddispls||sendcounts||recvdispls||recvcounts ) == NULL) {
+		  perror(".:Error while allocating memory for Alltoallw parameters:.\n");
+		  abort();
+	  }
+	  MPI_Datatype recvtype[size];
+	  contiguous_y[rank] = (in_jhi-in_jlo+1);
+	  contiguous_z[rank] = (in_khi-in_klo+1);
+	  for (int i = 0; i < size; i++){
+		  sendcounts[i] = 0;	recvdispls[i] = 0;		recvcounts[i] = 0;		recvtype[i] = MPI_DOUBLE;
+	  }
+	  // Broadcaster is the only one who send something
+	  if (rank == 0) {
+		  for (int i  = 0; i < size; i++){
+			  sendcounts[i] = 1;
+		  }
+	  }
+	  senddispls[rank] = (2*nxd*in_jlo + 2*nxd*ny*in_klo )*sizeof(double);
+	  recvcounts[0] = 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1);
+	  MPI_Allgather(&contiguous_y[rank],1,MPI_INT,contiguous_y,1,MPI_INT, MPI_COMM_WORLD);
+	  MPI_Allgather(&contiguous_z[rank],1,MPI_INT,contiguous_z,1,MPI_INT, MPI_COMM_WORLD);
+	  MPI_Allgather(&senddispls[rank],1,MPI_INT,senddispls,1,MPI_INT, MPI_COMM_WORLD);
+
+	  MPI_Datatype vector[size], contiguous[size];
+	  int bytes_stride = sizeof(double)*2*nxd*ny;
+
+	  for (int i = 0; i < size; i++) {
+		  MPI_Type_contiguous(2*nxd*contiguous_y[i], MPI_DOUBLE, &contiguous[i]);
+		  MPI_Type_create_hvector(contiguous_z[i], 1, bytes_stride, contiguous[i], &vector[i]);
+		  MPI_Type_commit(&vector[i]);
+	  }
+
+	  MPI_Alltoallw(&arr[0], sendcounts, senddispls, vector, &arr_recv[0], recvcounts, recvdispls, recvtype, MPI_COMM_WORLD);
+
+	  //Checking function
+	  /*if (rank == 2){
+		  for(int i = 0; i < recvcounts[0]; i++){
+			  printf("arr_recv[%d]= %f\n", i, arr_recv[i]);
+		  }
+	  }*/
+
+  MPI_Type_free(vector);
 }
