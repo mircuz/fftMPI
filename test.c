@@ -94,9 +94,6 @@ int main(int narg, char **args) {
 			  }
 		  }
 		  printarr(arr, 8, 4, 8, rank, 0, "Starting array");
-
-
-
 	  }
 
 
@@ -106,23 +103,33 @@ int main(int narg, char **args) {
 	  int *sendcounts = (int *) malloc(sizeof(int)*size);
 	  int *senddispls = (int *) malloc(sizeof(int)*size);
 	  int *recvdispls = (int *) malloc(sizeof(int)*size);
-	  int *localdims = (int *) malloc(sizeof(int)*size);
+	  int *recvcounts = (int *) malloc(sizeof(int)*size);
+	  if (( contiguous_z||contiguous_y||senddispls||sendcounts||recvdispls||recvcounts ) == NULL) {
+		  perror(".:Error while allocating memory for Alltoallw parameters:.\n");
+		  abort();
+	  }
 	  MPI_Datatype recvtype[size];
 	  contiguous_y[rank] = (in_jhi-in_jlo+1);
 	  contiguous_z[rank] = (in_khi-in_klo+1);
-	  senddispls[rank] = 2*nxd*in_jlo + 2*nxd*ny*in_klo;
-	  localdims[rank] = 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1);
 	  double *arr_recv = (double*)malloc(2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1)*sizeof(double));
 	  for (int i = 0; i < size; i++){
 		  sendcounts[i] = 0;
+		  //senddispls[i] = 0;
 		  recvdispls[i] = 0;
+		  recvcounts[i] = 0;
 		  recvtype[i] = MPI_DOUBLE;
 	  }
-	  sendcounts[0] = 1;
+	  // Broadcaster is the only one who send something
+	  if (rank == 0) {
+		  for (int i  = 0; i < size; i++){
+			  sendcounts[i] = 1;
+		  }
+	  }
+	  senddispls[rank] = (2*nxd*in_jlo + 2*nxd*ny*in_klo )*sizeof(double);
+	  recvcounts[0] = 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1);
 	  MPI_Allgather(&contiguous_y[rank],1,MPI_INT,contiguous_y,1,MPI_INT, MPI_COMM_WORLD);
 	  MPI_Allgather(&contiguous_z[rank],1,MPI_INT,contiguous_z,1,MPI_INT, MPI_COMM_WORLD);
 	  MPI_Allgather(&senddispls[rank],1,MPI_INT,senddispls,1,MPI_INT, MPI_COMM_WORLD);
-	  MPI_Allgather(&localdims[rank],1,MPI_INT,localdims,1,MPI_INT, MPI_COMM_WORLD);
 
 	  MPI_Datatype vector[size], contiguous[size];
 	  int bytes_stride = sizeof(double)*2*nxd*ny;
@@ -133,19 +140,13 @@ int main(int narg, char **args) {
 		  MPI_Type_commit(&vector[i]);
 	  }
 
-	  MPI_Alltoallw(&arr, sendcounts, senddispls, vector, &arr_recv, localdims, recvdispls, recvtype, MPI_COMM_WORLD);
+	  MPI_Alltoallw(&arr[0], sendcounts, senddispls, vector, &arr_recv[0], recvcounts, recvdispls, recvtype, MPI_COMM_WORLD);
 
-	  /*if (rank == 0){
-		  MPI_Send(&arr[ senddispls[3]], 1, vector[3], 3, 10, MPI_COMM_WORLD);
+	  if (rank == 7){
+		  for(int i = 0; i < recvcounts[0]; i++){
+			  printf("arr_recv[%d]= %f\n", i, arr_recv[i]);
+		  }
 	  }
-
-	  if (rank == 3) {
-    	double *arr_recv = (double*)malloc(2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1)*sizeof(double));
-    	MPI_Recv(arr_recv, localdims[rank], MPI_DOUBLE, 0, 10, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    	for(int i=0; i < 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1); i ++){
-    		printf("%d: %.1f\t\t",i, arr_recv[i]);
-    	}
-    }*/
 
 
     MPI_Type_free(vector);
