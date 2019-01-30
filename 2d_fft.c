@@ -21,10 +21,9 @@ int main(int narg, char **args) {
   MPI_Init(&narg,&args);
   MPI_Comm remap_comm; // @suppress("Type cannot be resolved")
   MPI_Comm_dup( MPI_COMM_WORLD, &remap_comm ); // @suppress("Symbol is not resolved")
-  MPI_Comm world = MPI_COMM_WORLD; // @suppress("Symbol is not resolved") // @suppress("Type cannot be resolved")
   int rank,size;
-  MPI_Comm_size(world,&size);
-  MPI_Comm_rank(world,&rank);
+  MPI_Comm_size(MPI_COMM_WORLD,&size);
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
   // Antialias along x
   int modes, nfast,nmid,nslow, nx,ny,nz;
@@ -513,7 +512,7 @@ int main(int narg, char **args) {
   if (rank == 0) free(UW);
 
   TIMER_AA += MPI_Wtime();
-  //print_y_pencil(nx, ny, nz, uu, rank, displs_scat[rank], scounts_scat[rank], 0);
+  //print_y_pencil(nx, ny, nz, uv, rank, displs_scat[rank], scounts_scat[rank], 0);
 
 
   /************************************************ Print Stats *********************************************/
