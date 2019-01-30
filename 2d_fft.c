@@ -265,7 +265,7 @@ int main(int narg, char **args) {
 	  uw[i] = u[i]*w[i];
   }
   timer_conv += MPI_Wtime();
-  print_z_pencil( nzd, out_ilo, out_ihi, out_jlo, uu, rank, scounts[rank], 0);
+  //print_z_pencil( nzd, out_ilo, out_ihi, out_jlo, uu, rank, scounts[rank], 1);
   if (rank == 0) printf("Completed\nStarting Forward transformations...\n");
 
   /************************************************ forward FFTs *********************************************/
@@ -326,7 +326,7 @@ int main(int narg, char **args) {
   free(recvbuf);	 free(sendbuf);
 
   // De-alias locally
-  //print_x_pencil(nx, in_jlo, in_jhi, in_klo, uu, rank, 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1), 2);
+  //print_x_pencil(nxd, in_jlo, in_jhi, in_klo, uu, rank, 2*nxd*(in_jhi-in_jlo+1)*(in_khi-in_klo+1), 2);
   double timer_aax = 0.0;
   timer_aax -= MPI_Wtime();
   //x_dealiasing( scounts[rank], modes_per_proc[rank], nx, nxd, u);
@@ -515,7 +515,7 @@ int main(int narg, char **args) {
   if (rank == 0) free(UW);
 
   TIMER_AA += MPI_Wtime();
-  //print_y_pencil(nx, ny, nz, uu, rank, displs_scat[rank], scounts_scat[rank], 0);
+  //print_y_pencil(nx, ny, nz, uu, rank, displs_scat[rank], scounts_scat[rank], 2);
 
 
   /************************************************ Print Stats *********************************************/

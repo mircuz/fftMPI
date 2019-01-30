@@ -280,27 +280,6 @@ void cores_handler( int modes, int size, int *modes_per_proc) {
 
 }
 
-void print_y_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
-		int displs, int scounts, int desidered_rank) {
-if (rank == desidered_rank) {
-	  int total_modes = displs/ (ny*2);
-	  int stride_nz = total_modes / nx;
-	  int stride_nx = total_modes - stride_nz * nx;
-
-	  for (int i = 0; i < scounts; i++) {
-   	  if ( i % (ny*2) == 0) {
-   		  printf("========(nx= %d, nz= %d)=======\n", stride_nx , stride_nz);
-   		  stride_nx ++;
-   		  if ( (stride_nx ) % nx == 0) {
-   			  stride_nx =0;
-   			  stride_nz ++;
-   		  }
-   	  }
-   	 printf("u[%d]= %.10f\n", (i), u[i]);
-     }
- }
-}
-
 void read_data_and_apply_AA(int nx, int ny, int nz, int nxd, int nzd, FFT_SCALAR *U, char file_to_read[4]) {
 
 	// Allocate the arrays
@@ -386,6 +365,27 @@ if (rank == desidered_rank) {
    	  printf("u[%d]= %.10f\n", (i), u[i]);
 	  }
 }
+}
+
+void print_y_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
+		int displs, int scounts, int desidered_rank) {
+if (rank == desidered_rank) {
+	  int total_modes = displs/ (ny*2);
+	  int stride_nz = total_modes / nx;
+	  int stride_nx = total_modes - stride_nz * nx;
+
+	  for (int i = 0; i < scounts; i++) {
+   	  if ( i % (ny*2) == 0) {
+   		  printf("========(nx= %d, nz= %d)=======\n", stride_nx , stride_nz);
+   		  if ( (stride_nx ) == (nx-1)) {
+   			  stride_nx =0;
+   			  stride_nz ++;
+   		  }
+   		  else stride_nx++;
+   	  }
+   	 printf("u[%d]= %.10f\n", (i), u[i]);
+     }
+ }
 }
 
 void print_z_pencil(int nz, int in_ilo, int in_ihi, int in_jlo,
