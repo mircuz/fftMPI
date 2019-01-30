@@ -232,7 +232,7 @@ int main(int narg, char **args) {
   remap3d_remap(remap_zpencil,u,u,sendbuf,recvbuf);
   remap3d_remap(remap_zpencil,v,v,sendbuf,recvbuf);
   remap3d_remap(remap_zpencil,w,w,sendbuf,recvbuf);
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(remap_comm); // @suppress("Symbol is not resolved")
   timer_trasp_z += MPI_Wtime();
 
 
@@ -301,7 +301,7 @@ int main(int narg, char **args) {
   remap3d_remap(remap_xpencil,vw,vw,sendbuf,recvbuf);
   remap3d_remap(remap_xpencil,ww,ww,sendbuf,recvbuf);
   remap3d_remap(remap_xpencil,uw,uw,sendbuf,recvbuf);
-  MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
+  MPI_Barrier(remap_comm); // @suppress("Symbol is not resolved")
   timer_trasp_x += MPI_Wtime();
 
 
@@ -512,7 +512,7 @@ int main(int narg, char **args) {
   if (rank == 0) free(UW);
 
   TIMER_AA += MPI_Wtime();
-  //print_y_pencil(nx, ny, nz, uv, rank, displs_scat[rank], scounts_scat[rank], 0);
+  //print_y_pencil(nx, ny, nz, uu, rank, displs_scat[rank], scounts_scat[rank], 1);
 
 
   /************************************************ Print Stats *********************************************/
