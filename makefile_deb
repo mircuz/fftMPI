@@ -1,0 +1,21 @@
+################################################################################ 
+# Author Dr. Mirco Meazzo
+
+
+
+# All Target
+all: 2d_fft
+
+# Tool invocations
+2d_fft: 
+	mpicxx -I /usr/local/include/ -I ~/Scrivania/fftmpi-1Oct18/src/ -c 2d_fft.c 
+	mpicxx -I /usr/local/include/ -I ~/Scrivania/fftmpi-1Oct18/src/ -c fft_support.c
+	mpicxx -o exe 2d_fft.o fft_support.o -L /usr/local/lib/ -lfft3dmpi -lm
+
+	
+# Other Targets
+clean:
+	
+	rm *.o
+	rm exe
+################################################################################ 
