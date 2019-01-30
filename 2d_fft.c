@@ -277,7 +277,6 @@ int main(int narg, char **args) {
 				  in_klo,  in_khi, in_ilo,  in_ihi,  in_jlo, in_jhi,
 				  nqty, permute, memoryflag, &sendsize, &recvsize);
   // -----------------------------------------------------------------------------------------------------------
-
   // Forward FFT#1
   double timer_f1 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
@@ -337,7 +336,6 @@ int main(int narg, char **args) {
   x_dealiasing( scounts[rank], modes_per_proc[rank], nx, nxd, ww);
   x_dealiasing( scounts[rank], modes_per_proc[rank], nx, nxd, uw);
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
-
   timer_aax += MPI_Wtime();
   if (rank == 0) printf("Completed\nStarting dealiasing operations\n");
 
@@ -515,7 +513,7 @@ int main(int narg, char **args) {
   if (rank == 0) free(UW);
 
   TIMER_AA += MPI_Wtime();
-  //print_y_pencil(nx, ny, nz, uu, rank, displs_scat[rank], scounts_scat[rank], 2);
+  //print_y_pencil(nx, ny, nz, uu, rank, displs_scat[rank], scounts_scat[rank], 0);
 
 
   /************************************************ Print Stats *********************************************/
@@ -544,6 +542,7 @@ int main(int narg, char **args) {
   	  printf("-----------------------------------------------------------\n\n");
   	  printf("Process Ended\n");
   }
+
 
   /**************************************** Release Mem & Finalize MPI *************************************/
   free(u);	free(v);	free(w);
