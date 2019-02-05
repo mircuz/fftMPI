@@ -17,6 +17,8 @@ void print_y_pencil(int nx, int ny, int nz, FFT_SCALAR *u, int rank,
 void print_z_pencil(int nz, int in_ilo, int in_ihi, int in_jlo,
 		FFT_SCALAR *u, int rank, int scounts, int desidered_rank);
 void FFT( double *c, int N, int isign );
+void b_FFT_HC2R( double *work, int elem_per_proc, int N_trasf);
+void f_FFT_R2HC( double *work, int elem_per_proc, int N_trasf);
 void b_FFT( double *work, int elem_per_proc, int N_trasf);
 void f_FFT( double *work, int elem_per_proc, int N_trasf);
 void read_data(int nx, int ny, int nz, FFT_SCALAR *U_read, char file_to_read[4]);

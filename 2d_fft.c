@@ -11,6 +11,7 @@
 #include <time.h>
 #include "remap3d_wrap.h"    // To perform 3D remapping
 #include "fft_support.h"
+#include <fftw3.h>
 
 
 #define MODES 8;
@@ -253,9 +254,9 @@ int main(int narg, char **args) {
     if (rank == 0) transpose_on_rank0( nx, ny, nz, W_read);
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Scatterv(W_read, scounts_scat, displs_scat, MPI_DOUBLE, w_read, receive_scat[rank] , MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
     if(rank == 0) free(W_read);
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
 
 
   /************************************************ backward FFTs *********************************************/
@@ -266,18 +267,20 @@ int main(int narg, char **args) {
       		  	  x_ilo,  x_ihi,  x_jlo, x_jhi,  x_klo,  x_khi,
 				  z_ilo,  z_ihi,  z_jlo, z_jhi,  z_klo,  z_khi,
       			  nqty, permute, memoryflag, &sendsize, &recvsize);
-  // -----------------------------------------------------------------------------------------------------------
+  // ----------------------------------------------------------------------------------------------------------
   // Backward FFT#1
-  //print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 3);
+  print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 0);
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   double timer_b1 = 0.0;
   timer_b1 -= MPI_Wtime();
-  b_FFT( u, elem_per_proc, i_length );
-  b_FFT( v, elem_per_proc, i_length );
-  b_FFT( w, elem_per_proc, i_length );
+  b_FFT_HC2R( u, elem_per_proc, i_length );
+  f_FFT_R2HC( u, elem_per_proc, i_length );
+  print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 0);
+  b_FFT_HC2R( v, elem_per_proc, i_length );
+  b_FFT_HC2R( w, elem_per_proc, i_length );
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_b1 += MPI_Wtime();
-
+  //print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 0);
 
   // Transpose in z-pencil
   double timer_trasp_z = 0.0, TIMER_TRASP_z = 0.0;
@@ -362,8 +365,8 @@ int main(int narg, char **args) {
   double timer_f2 = 0.0;
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_f2 -= MPI_Wtime();
-  f_FFT( u, elem_per_proc, i_length );
-  f_FFT( uu, elem_per_proc, i_length );
+  f_FFT_R2HC( u, elem_per_proc, i_length );
+  f_FFT_R2HC( uu, elem_per_proc, i_length );
   f_FFT( uv, elem_per_proc, i_length );
   f_FFT( vv, elem_per_proc, i_length );
   f_FFT( vw, elem_per_proc, i_length );
@@ -546,7 +549,7 @@ int main(int narg, char **args) {
   if (rank == 0) free(UW);
 
   TIMER_AA += MPI_Wtime();
-  print_y_pencil(nx, ny, nz, u, rank, displs_scat[rank], scounts_scat[rank], 3);
+  //print_y_pencil(nx, ny, nz, u, rank, displs_scat[rank], scounts_scat[rank], 3);
 
 
   /************************************************ Print Stats *********************************************/
