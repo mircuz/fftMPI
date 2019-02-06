@@ -138,24 +138,27 @@ void b_FFT_HC2R( double *work, int elem_per_proc, int N_trasf) {
 	double* store = (double*)malloc(sizeof(double)*N_trasf*2);
 	// ---------------------------------------- Setup x-Transformation-------------------------------------------
 	double *in = (double*)fftw_malloc(sizeof(double)*N_trasf*2);
-	fftw_plan plan_backward;
-	plan_backward = fftw_plan_r2r_1d( 2*N_trasf, in, in, FFTW_HC2R, FFTW_ESTIMATE);
+	fftw_plan plan_backward; // @suppress("Type cannot be resolved")
+	plan_backward = fftw_plan_r2r_1d( 2*N_trasf, in, in, FFTW_HC2R, FFTW_ESTIMATE); // @suppress("Symbol is not resolved")
 	int count = 0;
 	while ( count < elem_per_proc/(2*N_trasf)) {			// To move among rows in the pencil
 		// fill intermediate array
 		for ( int i = 0; i < 2*N_trasf; i++ ){
-			in[i] = work[i+count*2*N_trasf];
+			store[i] = work[i+count*2*N_trasf];
+			//printf("Store[%d]= %f\t", i, store[i]);
 		}
-		/*/ Write in format HC2R
-		int real= 0, imag=N_trasf, reader_r=0, reader_i=2*N_trasf;
+		// Write in format HC2R
+		int real= 0, imag=N_trasf, reader_r=0, reader_i=2*N_trasf-1;
 		while ( real < N_trasf) {
 			in[real] = store[reader_r];
 			real++;
 			reader_r++;	reader_r++;
+		}
+		while (imag < 2*N_trasf) {
 			in[imag] = store[reader_i];
 			imag++;
 			reader_i--; reader_i--;
-		}*/
+		}
 		// Execute FFT & Normalize
 		fftw_execute(plan_backward);
 		for (int i = 0; i < 2*N_trasf; i++) {
@@ -192,28 +195,30 @@ void f_FFT_R2HC( double *work, int elem_per_proc, int N_trasf) {
 	double* store = (double*)malloc(sizeof(double)*N_trasf*2);
 	// ---------------------------------------- Setup x-Transformation-------------------------------------------
 	double *in = (double*)fftw_malloc(sizeof(double)*N_trasf*2);
-	fftw_plan plan_forward;
-	plan_forward = fftw_plan_r2r_1d( 2*N_trasf, in, in, FFTW_R2HC, FFTW_ESTIMATE);
+	fftw_plan plan_forward; // @suppress("Type cannot be resolved")
+	plan_forward = fftw_plan_r2r_1d( 2*N_trasf, in, in, FFTW_R2HC, FFTW_ESTIMATE); // @suppress("Symbol is not resolved")
 	int count = 0;
 	while ( count < elem_per_proc/(2*N_trasf)) {			// To move among rows in the pencil
 		// fill intermediate array
 		for ( int i = 0; i < 2*N_trasf; i++ ){
 			in[i] = work[i+count*2*N_trasf];
 		}
-		/*/ Write in format HC2R
-		int real= 0, imag=N_trasf, reader_r=0, reader_i=2*N_trasf;
-		while ( real < N_trasf) {
-			in[real] = store[reader_r];
-			real++;
-			reader_r++;	reader_r++;
-			in[imag] = store[reader_i];
-			imag++;
-			reader_i--; reader_i--;
-		}*/
 		// Execute FFT
 		fftw_execute(plan_forward);
+		// Back to complex format
+		int real= 0, imag=1, reader_r=0, reader_i=2*N_trasf-1;
+		while (reader_r < N_trasf) {
+			store[real] = in[reader_r];
+			real++; 	real++;
+			reader_r++;
+		}
+		while (reader_i > N_trasf) {
+			store[imag] = in[reader_i];
+			imag++; 	imag++;
+			reader_i--;
+		}
 		for (int i = 0; i < 2*N_trasf; i++) {
-			work[i+count*2*N_trasf] = in[i];
+			work[i+count*2*N_trasf] = store[i];
 		}
 		count++;
 	}

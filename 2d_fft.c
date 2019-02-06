@@ -269,18 +269,17 @@ int main(int narg, char **args) {
       			  nqty, permute, memoryflag, &sendsize, &recvsize);
   // ----------------------------------------------------------------------------------------------------------
   // Backward FFT#1
-  print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 0);
+  //print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 0);
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   double timer_b1 = 0.0;
   timer_b1 -= MPI_Wtime();
   b_FFT_HC2R( u, elem_per_proc, i_length );
-  f_FFT_R2HC( u, elem_per_proc, i_length );
-  print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 0);
   b_FFT_HC2R( v, elem_per_proc, i_length );
+  //f_FFT_R2HC( v, elem_per_proc, i_length );
   b_FFT_HC2R( w, elem_per_proc, i_length );
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_b1 += MPI_Wtime();
-  //print_x_pencil(nxd, x_jlo, x_jhi, x_klo, u, rank, scounts[rank], 0);
+  print_x_pencil(nxd, x_jlo, x_jhi, x_klo, v, rank, scounts[rank], 0);
 
   // Transpose in z-pencil
   double timer_trasp_z = 0.0, TIMER_TRASP_z = 0.0;
@@ -295,9 +294,9 @@ int main(int narg, char **args) {
   // Backward FFT#2
   double timer_b2 = 0.0;
   timer_b2 -= MPI_Wtime();
-  b_FFT( u, elem_per_proc, k_length );
-  b_FFT( v, elem_per_proc, k_length );
-  b_FFT( w, elem_per_proc, k_length );
+ // b_FFT( u, elem_per_proc, k_length );
+ // b_FFT( v, elem_per_proc, k_length );
+ // b_FFT( w, elem_per_proc, k_length );
   MPI_Barrier( MPI_COMM_WORLD); // @suppress("Symbol is not resolved")
   timer_b2 += MPI_Wtime();
 
